@@ -614,7 +614,10 @@ function parse(raw, filename) {
            diseno, dibujo, revision, aprobacion, director, notas: '' };
 }
 
-// ── PDF EXTRACTION ────────────────────────────────────────────
+// ── PDF EXTRACTION — por coordenadas X,Y ─────────────────────
+// En vez de texto lineal, reconstruye filas reales usando posición Y
+// y columnas usando posición X — así la carátula queda como tabla
+
 async function extractPDF(file) {
   var fallback = {
     code: (file.name.match(/(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})/i)||['',file.name.replace(/\.pdf$/i,'')])[1].toUpperCase(),
@@ -623,27 +626,170 @@ async function extractPDF(file) {
     aprobacion:'', director:'', notas:''
   };
   if (typeof pdfjsLib === 'undefined') return fallback;
+
   try {
     var ab  = await file.arrayBuffer();
     var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    var text = '';
-    for (var i = 1; i <= Math.min(pdf.numPages, 3); i++) {
-      var page = await pdf.getPage(i);
-      var tc   = await page.getTextContent();
-      var lastY = null;
-      for (var item of tc.items) {
-        var y = item.transform ? item.transform[5] : null;
-        if (lastY !== null && y !== null && Math.abs(y - lastY) > 3) text += '\n';
-        text += item.str + ' ';
-        lastY = y;
-      }
-      text += '\n';
+
+    // Recopila TODOS los items de todas las páginas con sus coordenadas absolutas
+    var allItems = [];
+    for (var p = 1; p <= Math.min(pdf.numPages, 3); p++) {
+      var page    = await pdf.getPage(p);
+      var vp      = page.getViewport({ scale: 1 });
+      var tc      = await page.getTextContent();
+      var pageH   = vp.height;
+
+      tc.items.forEach(function(item) {
+        if (!item.str.trim()) return; // ignora vacíos
+        var x = item.transform[4];
+        var y = pageH - item.transform[5]; // invertir Y: 0 = arriba
+        allItems.push({ x: x, y: y, text: item.str.trim(), page: p });
+      });
     }
-    return parse(text, file.name);
+
+    // ── PASO 1: agrupar en filas por proximidad Y (tolerancia 4px) ──
+    allItems.sort((a, b) => a.y - b.y || a.x - b.x);
+
+    var rows2 = []; // [{y, items:[{x,text}]}]
+    allItems.forEach(function(item) {
+      var found = rows2.find(r => Math.abs(r.y - item.y) <= 4);
+      if (found) {
+        found.items.push({ x: item.x, text: item.text });
+      } else {
+        rows2.push({ y: item.y, items: [{ x: item.x, text: item.text }] });
+      }
+    });
+
+    // Ordena items dentro de cada fila por X (izquierda→derecha)
+    rows2.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+    // ── PASO 2: cada fila queda como "LABEL  valor" o "label: valor" ──
+    // Genera texto por filas ordenadas por Y
+    var lineTexts = rows2.map(r => r.items.map(i => i.text).join('  '));
+
+    // DEBUG: guarda líneas reconstruidas
+    window._lastRaw  = lineTexts.join('\n');
+    window._lastRows = rows2;
+
+    // ── PASO 3: busca la carátula por zona X ──
+    // La carátula BRH está en la esquina derecha del plano (X alto)
+    // Detecta el X mínimo de la zona de carátula buscando donde aparecen los labels
+    var caratulaKeywords = /DISEÑO|DIBUJO|REVISION|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REV\b|PLANO|CODIGO|DIRECTOR|APROBACION/i;
+    var caratulaItems = allItems.filter(i => caratulaKeywords.test(i.text));
+    var caratulaX = caratulaItems.length
+      ? Math.min(...caratulaItems.map(i => i.x)) - 5
+      : 0;
+
+    // Filtra solo items de la zona de carátula
+    var caratulaRows = rows2
+      .map(r => ({
+        y: r.y,
+        items: r.items.filter(i => i.x >= caratulaX)
+      }))
+      .filter(r => r.items.length > 0);
+
+    // Texto de la carátula reconstruido por filas
+    var caratulaText = caratulaRows
+      .map(r => r.items.map(i => i.text).join('  '))
+      .join('\n');
+
+    window._caratulaText = caratulaText;
+
+    // ── PASO 4: parsear la carátula reconstruida ──
+    // Ahora cada línea tiene el formato real: "DISEÑO  VALERIA CONCHA  01/06/2026"
+    // Usa el parser de líneas en vez del regex sobre texto lineal
+    var result = parseFromLines(caratulaRows, caratulaText, file.name);
+    return result;
+
   } catch(e) {
     console.warn('PDF error:', e);
     return fallback;
   }
+}
+
+// ── PARSER BASADO EN LÍNEAS RECONSTRUIDAS ─────────────────────
+// Recibe las filas reales de la carátula con posición X
+// Estrategia: cada fila tiene [label, valor] o [label, valor, fecha_firma]
+// La columna izquierda es el label, la derecha el valor
+
+function parseFromLines(caraRows, caraText, filename) {
+
+  // Mapa label → valor construido desde filas
+  var fieldMap = {};
+
+  caraRows.forEach(function(row) {
+    var line = row.items.map(i => i.text).join(' ').trim();
+    if (!line) return;
+
+    // Detecta si la línea tiene un label conocido
+    var labelMatch = line.match(/^(DISEÑO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|DIRECTOR(?:\s+DEL\s+PROYECTO)?|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REV|PLANO|C[OÓ]DIGO(?:\s+DEL\s+PLANO)?)\s*[:\-]?\s*(.*)/i);
+
+    if (labelMatch) {
+      var label = labelMatch[1].toUpperCase().trim();
+      var val   = labelMatch[2].trim();
+
+      // Limpia fecha pegada al final (celdas de firma BRH)
+      val = val.replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '').trim();
+
+      // Normaliza label a clave
+      if (/DISE/.test(label))         fieldMap['diseno']      = val;
+      else if (/DIBUJO/.test(label))  fieldMap['dibujo']      = val;
+      else if (/REVISI/.test(label))  fieldMap['revision']    = val;
+      else if (/APROBAC/.test(label)) fieldMap['aprobacion']  = val;
+      else if (/DIRECTOR/.test(label))fieldMap['director']    = val;
+      else if (/ESPECIALIDAD/.test(label)) fieldMap['especialidad'] = val;
+      else if (/^USO/.test(label))    fieldMap['uso']         = val;
+      else if (/ZONA/.test(label))    fieldMap['zona']        = val;
+      else if (/ESCALA/.test(label))  fieldMap['escala']      = val;
+      else if (/FECHA/.test(label))   fieldMap['fecha']       = val;
+      else if (/^REV$/.test(label))   fieldMap['rev']         = val.match(/R\d{2,3}/i) ? val.match(/R\d{2,3}/i)[0].toUpperCase() : val;
+      else if (/PLANO/.test(label))   fieldMap['title']       = val.replace(/SECCIONES.*/i,'').trim().substring(0,100);
+      else if (/C.DIGO/.test(label))  fieldMap['code_raw']    = val;
+    }
+  });
+
+  // CÓDIGO — del mapa o directamente del texto completo
+  var cm = caraText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i)
+          || caraText.match(/-(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
+  var code = cm ? cm[1].toUpperCase()
+           : (fieldMap['code_raw'] || filename.replace(/\.pdf$/i,''));
+
+  // FECHA — si no está en fieldMap, busca patrón dd/mm/yyyy en la zona de FECHA
+  var fecha = fieldMap['fecha'] || '';
+  if (!fecha) {
+    var fm = caraText.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i)
+            || caraText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+    fecha = fm ? fm[1] : '';
+  }
+  // Si fecha es una fecha completa dd/mm/yyyy tómala directamente
+  if (fecha && !fecha.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+    var fm2 = fecha.match(/(\d{2}\/\d{2}\/\d{4})/);
+    fecha = fm2 ? fm2[1] : '';
+  }
+
+  // REV — si no está en fieldMap busca en texto
+  var rev = fieldMap['rev'] || '';
+  if (!rev) {
+    var rm = caraText.match(/\bREV\s*[:\-]?\s*(R\d{2,3})\b/i);
+    rev = rm ? rm[1].toUpperCase() : '';
+  }
+
+  return {
+    code:         code,
+    title:        fieldMap['title']        || '',
+    especialidad: fieldMap['especialidad'] || '',
+    uso:          fieldMap['uso']          || '',
+    zona:         fieldMap['zona']         || '',
+    escala:       fieldMap['escala']       || '',
+    fecha:        fecha,
+    rev:          rev,
+    diseno:       fieldMap['diseno']       || '',
+    dibujo:       fieldMap['dibujo']       || '',
+    revision:     fieldMap['revision']     || '',
+    aprobacion:   fieldMap['aprobacion']   || '',
+    director:     fieldMap['director']     || '',
+    notas:        ''
+  };
 }
 
 // ── FILE HANDLING ─────────────────────────────────────────────
@@ -812,8 +958,11 @@ renderTable();
 
 <script>
 function showDebug() {
-  var t = window._lastRaw || 'Carga un PDF primero.';
-  document.getElementById('dbg-txt').value = t;
+  var cara = window._caratulaText || '—';
+  var full  = window._lastRaw     || '—';
+  var out   = '=== CARÁTULA AISLADA (zona X derecha) ===\n' + cara
+            + '\n\n=== TODAS LAS LÍNEAS RECONSTRUIDAS ===\n' + full;
+  document.getElementById('dbg-txt').value = out;
   document.getElementById('dbg-overlay').style.display = 'flex';
 }
 </script>
