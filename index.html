@@ -442,6 +442,9 @@ footer span { color: var(--text2); }
       <button class="btn btn-primary" onclick="exportCSV()">
         ↓ CSV
       </button>
+      <button class="btn" onclick="showDebug()" title="Ver texto crudo del último PDF para diagnóstico">
+        ⚙ Debug
+      </button>
     </div>
   </header>
 
@@ -525,82 +528,86 @@ var COLS = [
   { key: 'notas',        label: 'Notas',                w: '160px' },
 ];
 
-// ── PARSER BRH ───────────────────────────────────────────────
-// Basado en carátula real 500122-BERH001-740-XX-DR-LS-030006
-// Campos del equipo tienen formato: "DISEÑO : NOMBRE 01/06/2026"
+// ── PARSER BRH v4 ────────────────────────────────────────────
+// Robusto: funciona con o sin ":" separador
+// Acepta tanto "CAMPO : valor" como "CAMPO valor"
 
-var KL = 'PLANO|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REVISION|REVISIÓN|CODIGO DEL PLANO|CÓDIGO DEL PLANO|CODIGO|DISEÑO|DISENO|DIBUJO|APROBACION|APROBACIÓN|DIRECTOR DEL PROYECTO|DIRECTOR|SECCIONES|SITUACION';
+var KL = 'PLANO|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REVISION|REVISIÓN|CODIGO DEL PLANO|CÓDIGO DEL PLANO|CODIGO|DISEÑO|DISENO|DIBUJO|APROBACION|APROBACIÓN|DIRECTOR DEL PROYECTO|DIRECTOR|SECCIONES|SITUACION|ROGGIO|ANIN|PERU';
 
-function xf(rx, txt, max) {
+// Extrae campo: primero intenta con ":", luego sin ":"
+function xf(rx, t, max) {
   max = max || 80;
-  var p = new RegExp(rx + '\\s*[:\\-]\\s*(.+?)(?=\\s+(?:' + KL + ')\\s*[:\\-]|$)', 'i');
-  var m = txt.match(p);
-  return m ? m[1].trim().substring(0, max) : '';
+  // Con separador ":" o "-"
+  var p1 = new RegExp(rx + '\\s*[:\\-]\\s*(.+?)(?=\\s+(?:' + KL + ')\\s*[:\\-\\s]|$)', 'i');
+  var m1 = t.match(p1);
+  if (m1) return m1[1].trim().substring(0, max);
+  // Sin separador — label seguido de espacio + valor
+  var p2 = new RegExp(rx + '\\s+(.+?)(?=\\s+(?:' + KL + ')\\s|$)', 'i');
+  var m2 = t.match(p2);
+  return m2 ? m2[1].trim().substring(0, max) : '';
 }
 
 function stripDate(v) {
-  // Quita "01/06/2026" o "01/06/26" pegado al final por la celda de firma
   return v.replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '').trim();
 }
 
 function parse(raw, filename) {
-  // Normaliza: marca saltos de línea como §, luego colapsa espacios
-  var t = raw
-    .replace(/\r\n|\r|\n/g, ' § ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  var t = raw.replace(/\r\n|\r|\n/g, ' § ').replace(/\s+/g, ' ').trim();
 
-  // CÓDIGO — patrón BRH: NNNNNN-XXXXXXXN-NNN-XX-XX-XX-NNNNNN
-  var cm = t.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
-  // También acepta el prefijo con guión del footer: "-500122-BERH001..."
-  if (!cm) cm = t.match(/-(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
+  // DEBUG — guarda el texto para diagnóstico
+  window._lastRaw = t;
+
+  // CÓDIGO — patrón BRH
+  var cm = t.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i)
+          || t.match(/-(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
   var code = cm ? cm[1].toUpperCase() : filename.replace(/\.pdf$/i, '');
 
-  // NOMBRE DEL PLANO — "PLANO : ESTANQUE VERDE ADUS 1 SECCIONES GENERALES..."
+  // NOMBRE — entre PLANO y SECCIONES/ESPECIALIDAD
   var title = '';
-  var pm = t.match(/PLANO\s*[:\-]\s*(.+?)(?=\s+(?:SECCIONES\s+GENERALES|SITUACI[OÓ]N|ESPECIALIDAD|USO|ZONA|§|$))/i);
+  var pm = t.match(/PLANO\s*[:\-]?\s*(.+?)(?=\s+(?:SECCIONES\s+GENERALES|SITUACI[OÓ]N|ESPECIALIDAD|USO|ZONA|§|$))/i)
+          || t.match(/PLANO\s+(.+?)(?=\s+SECCIONES|\s+ESPECIALIDAD|\s+USO|$)/i);
   if (pm) title = pm[1].replace(/SECCIONES.*/i,'').replace(/§/g,' ').trim().substring(0,100);
 
   // ESPECIALIDAD
   var especialidad = xf('ESPECIALIDAD', t, 70);
 
-  // USO — "740 - Outflow - 1"
+  // USO
   var uso = '';
-  var um = t.match(/\bUSO\s*[:\-]\s*(.+?)(?=\s+(?:ZONA|ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
+  var um = t.match(/\bUSO\s*[:\-]?\s*(.+?)(?=\s+(?:ZONA|ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
   if (um) uso = um[1].replace(/§/g,' ').trim().substring(0,60);
 
-  // ZONA — "SULLANA-SULLANA-PIURA"
+  // ZONA
   var zona = '';
-  var zm = t.match(/ZONA\s*[:\-]\s*(.+?)(?=\s+(?:ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
+  var zm = t.match(/ZONA\s*[:\-]?\s*(.+?)(?=\s+(?:ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
   if (zm) zona = zm[1].replace(/§/g,' ').trim().substring(0,60);
 
-  // ESCALA — "INDICADA" o "GRAFICA"
+  // ESCALA
   var escala = '';
-  var em = t.match(/ESCALA\s*[:\-]\s*(.+?)(?=\s+(?:FECHA|ZONA|CODIGO|DISEÑO|§|$))/i);
+  var em = t.match(/ESCALA\s*[:\-]?\s*(.+?)(?=\s+(?:FECHA|ZONA|CODIGO|DISEÑO|§|$))/i);
   if (em) escala = em[1].replace(/§/g,' ').trim().substring(0,30);
 
-  // FECHA — busca específicamente "FECHA : dd/mm/yyyy"
-  var fm = t.match(/\bFECHA\s*[:\-]\s*(\d{2}\/\d{2}\/\d{4})/i);
-  var fecha = fm ? fm[1] : (t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/) || ['',''])[1];
+  // FECHA — busca el patrón dd/mm/yyyy más cercano a "FECHA"
+  var fm = t.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i);
+  var fecha = fm ? fm[1] : (t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/)||['',''])[1];
 
-  // REV — "REV : R01"
-  var rm = t.match(/\bREV\s*[:\-]\s*(R\d{2,3})\b/i);
+  // REV
+  var rm = t.match(/\bREV\s*[:\-]?\s*(R\d{2,3})\b/i);
   var rev = rm ? rm[1].toUpperCase() : '';
 
-  // EQUIPO — cada celda tiene nombre + fecha pegada: "VALERIA CONCHA 01/06/2026"
+  // EQUIPO — con o sin ":"
   var diseno    = stripDate(xf('DISE[ÑN]O', t, 60));
   var dibujo    = stripDate(xf('DIBUJO', t, 60));
 
   var revision = '';
-  var rvpm = t.match(/REVISI[OÓ]N\s*[:\-]\s*(.+?)(?=\s+(?:APROBACI[OÓ]N|DIRECTOR|DISEÑO|DISENO|DIBUJO|§|$))/i);
-  if (rvpm) revision = stripDate(rvpm[1].replace(/§/g,' ').trim()).substring(0,50);
+  var rvm = t.match(/REVISI[OÓ]N\s*[:\-]?\s*(.+?)(?=\s+(?:APROBACI[OÓ]N|DIRECTOR|DISEÑO|DISENO|DIBUJO|§|$))/i);
+  if (rvm) revision = stripDate(rvm[1].replace(/§/g,' ').trim()).substring(0,50);
 
   var aprobacion = '';
-  var apm = t.match(/APROBACI[OÓ]N\s*[:\-]\s*(.+?)(?=\s+(?:DIRECTOR|DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|§|$))/i);
+  var apm = t.match(/APROBACI[OÓ]N\s*[:\-]?\s*(.+?)(?=\s+(?:DIRECTOR|DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|§|$))/i);
   if (apm) aprobacion = stripDate(apm[1].replace(/§/g,' ').trim()).substring(0,50);
 
   var director = '';
-  var dm = t.match(/DIRECTOR(?:\s+DEL\s+PROYECTO)?\s*[:\-]\s*(.+?)(?=\s+(?:DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|§|$))/i);
+  var dm = t.match(/DIRECTOR(?:\s+DEL\s+PROYECTO)?\s*[:\-]?\s*(.+?)(?=\s+(?:DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|§|$))/i);
   if (dm) director = stripDate(dm[1].replace(/§/g,' ').trim()).substring(0,60);
 
   return { code, title, especialidad, uso, zona, escala, fecha, rev,
@@ -787,6 +794,28 @@ function toast(msg, type) {
 
 // ── INIT ──────────────────────────────────────────────────────
 renderTable();
+</script>
+<!-- DEBUG MODAL -->
+<div id="dbg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid #ccc;border-radius:6px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid #e2e0db;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:var(--mono);font-size:12px;font-weight:500">Texto crudo extraído del PDF</span>
+      <button onclick="document.getElementById('dbg-overlay').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:#999">×</button>
+    </div>
+    <textarea id="dbg-txt" readonly style="flex:1;padding:14px;font-family:var(--mono);font-size:11px;color:#333;border:none;resize:none;outline:none;overflow:auto;min-height:300px;background:#f7f6f3;line-height:1.7"></textarea>
+    <div style="padding:10px 18px;border-top:1px solid #e2e0db;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('dbg-txt').value);toast('Copiado','ok')">Copiar texto</button>
+      <button class="btn" onclick="document.getElementById('dbg-overlay').style.display='none'">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showDebug() {
+  var t = window._lastRaw || 'Carga un PDF primero.';
+  document.getElementById('dbg-txt').value = t;
+  document.getElementById('dbg-overlay').style.display = 'flex';
+}
 </script>
 </body>
 </html>
