@@ -707,71 +707,177 @@ async function extractPDF(file) {
   }
 }
 
-// ── PARSER BASADO EN LÍNEAS RECONSTRUIDAS ─────────────────────
-// Recibe las filas reales de la carátula con posición X
-// Estrategia: cada fila tiene [label, valor] o [label, valor, fecha_firma]
-// La columna izquierda es el label, la derecha el valor
+// ── PARSER v5 — FILAS ADYACENTES ─────────────────────────────
+// El debug reveló el patrón real de la carátula BRH:
+// Las filas de LABELS y VALORES están en líneas SEPARADAS pero adyacentes en Y
+// Ej:  fila A: "VALERIA  CRISTHIAN  NORCA  CARLOS  VICTOR  ..."
+//      fila B: "DISEÑO   DIBUJO     REVISION  APROBACION  DIRECTOR..."
+// La fila B tiene los labels, la fila A (justo encima) tiene los valores
+// La posición X de cada item determina a qué columna pertenece
 
 function parseFromLines(caraRows, caraText, filename) {
-
-  // Mapa label → valor construido desde filas
   var fieldMap = {};
 
-  caraRows.forEach(function(row) {
-    var line = row.items.map(i => i.text).join(' ').trim();
-    if (!line) return;
+  // ── ESTRATEGIA 1: fila de labels + fila de valores adyacentes ──
+  // Detecta la fila que contiene los labels del equipo
+  var LABEL_KEYWORDS = /^(DISEÑO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|DIRECTOR|REV\.?)$/i;
+  var FIELD_KEYWORDS = /DISEÑO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|DIRECTOR/i;
 
-    // Detecta si la línea tiene un label conocido
-    var labelMatch = line.match(/^(DISEÑO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|DIRECTOR(?:\s+DEL\s+PROYECTO)?|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REV|PLANO|C[OÓ]DIGO(?:\s+DEL\s+PLANO)?)\s*[:\-]?\s*(.*)/i);
+  // Busca la fila que tiene al menos 3 labels del equipo
+  var labelRowIdx = -1;
+  caraRows.forEach(function(row, idx) {
+    var labelCount = row.items.filter(i => LABEL_KEYWORDS.test(i.text.trim())).length;
+    if (labelCount >= 2) labelRowIdx = idx;
+  });
 
-    if (labelMatch) {
-      var label = labelMatch[1].toUpperCase().trim();
-      var val   = labelMatch[2].trim();
+  if (labelRowIdx >= 0) {
+    var labelRow  = caraRows[labelRowIdx];
+    // La fila de valores está justo ENCIMA (Y menor = más arriba en pantalla)
+    // En nuestro sistema Y crece hacia abajo, así que la fila anterior en el array
+    var valueRow  = caraRows[labelRowIdx - 1] || null;
+    // También puede estar debajo
+    var valueRow2 = caraRows[labelRowIdx + 1] || null;
 
-      // Limpia fecha pegada al final (celdas de firma BRH)
-      val = val.replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '').trim();
+    // Determina cuál tiene los valores (nombres de personas, no labels)
+    var candidateRow = null;
+    if (valueRow) {
+      var hasNames = valueRow.items.some(i => /^[A-ZÁÉÍÓÚ][a-záéíóúñ]+/.test(i.text) || /^[A-Z]{2,}$/.test(i.text) && !/DISEÑO|DIBUJO|REVISION|APROBACION|DIRECTOR|REV/.test(i.text));
+      if (hasNames) candidateRow = valueRow;
+    }
+    if (!candidateRow && valueRow2) {
+      var hasNames2 = valueRow2.items.some(i => /^[A-ZÁÉÍÓÚ][a-záéíóúñ]+/.test(i.text));
+      if (hasNames2) candidateRow = valueRow2;
+    }
 
-      // Normaliza label a clave
-      if (/DISE/.test(label))         fieldMap['diseno']      = val;
-      else if (/DIBUJO/.test(label))  fieldMap['dibujo']      = val;
-      else if (/REVISI/.test(label))  fieldMap['revision']    = val;
-      else if (/APROBAC/.test(label)) fieldMap['aprobacion']  = val;
-      else if (/DIRECTOR/.test(label))fieldMap['director']    = val;
-      else if (/ESPECIALIDAD/.test(label)) fieldMap['especialidad'] = val;
-      else if (/^USO/.test(label))    fieldMap['uso']         = val;
-      else if (/ZONA/.test(label))    fieldMap['zona']        = val;
-      else if (/ESCALA/.test(label))  fieldMap['escala']      = val;
-      else if (/FECHA/.test(label))   fieldMap['fecha']       = val;
-      else if (/^REV$/.test(label))   fieldMap['rev']         = val.match(/R\d{2,3}/i) ? val.match(/R\d{2,3}/i)[0].toUpperCase() : val;
-      else if (/PLANO/.test(label))   fieldMap['title']       = val.replace(/SECCIONES.*/i,'').trim().substring(0,100);
-      else if (/C.DIGO/.test(label))  fieldMap['code_raw']    = val;
+    if (candidateRow) {
+      // Mapea cada label (por posición X) a su valor correspondiente en la fila de valores
+      labelRow.items.forEach(function(labelItem) {
+        var label = labelItem.text.trim().toUpperCase().replace(/\.$/, '');
+        // Busca el valor más cercano en X en la fila de valores
+        var closest = candidateRow.items.reduce(function(best, vi) {
+          var dist = Math.abs(vi.x - labelItem.x);
+          return (!best || dist < best.dist) ? { dist: dist, text: vi.text } : best;
+        }, null);
+        if (closest && closest.dist < 80) { // tolerancia 80px en X
+          var val = closest.text.trim().replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '').trim();
+          if (/DISE/.test(label))          fieldMap['diseno']     = val;
+          else if (/DIBUJO/.test(label))   fieldMap['dibujo']     = val;
+          else if (/REVISI/.test(label))   fieldMap['revision']   = val;
+          else if (/APROBAC/.test(label))  fieldMap['aprobacion'] = val;
+          else if (/DIRECTOR/.test(label)) fieldMap['director']   = val;
+        }
+      });
+    }
+  }
+
+  // ── ESTRATEGIA 2: busca la fila de datos del plano ──
+  // Patrón: una sola línea larga con todos los valores de metadatos
+  // "VALERIA CRISTHIAN NORCA CARLOS VICTOR PLANO ESPECIALIDAD USO ZONA SULLANA ESCALA CÓDIGO"
+  var metaRowIdx = -1;
+  caraRows.forEach(function(row, idx) {
+    var txt = row.items.map(i => i.text).join(' ');
+    if (/ESPECIALIDAD/i.test(txt) && /USO/i.test(txt) && /ZONA/i.test(txt)) {
+      metaRowIdx = idx;
     }
   });
 
-  // CÓDIGO — del mapa o directamente del texto completo
-  var cm = caraText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i)
-          || caraText.match(/-(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
-  var code = cm ? cm[1].toUpperCase()
-           : (fieldMap['code_raw'] || filename.replace(/\.pdf$/i,''));
+  if (metaRowIdx >= 0) {
+    var metaRow   = caraRows[metaRowIdx];
+    // La fila de valores de metadatos está justo ENCIMA (idx - 1)
+    var metaVals  = caraRows[metaRowIdx - 1] || null;
 
-  // FECHA — si no está en fieldMap, busca patrón dd/mm/yyyy en la zona de FECHA
+    if (metaVals) {
+      // Mapea por posición X: ESPECIALIDAD → valor, USO → valor, etc.
+      var metaLabels = [
+        { key: 'especialidad', rx: /ESPECIALIDAD/i },
+        { key: 'uso',          rx: /^USO$/i },
+        { key: 'zona',         rx: /^ZONA$/i },
+        { key: 'escala',       rx: /^ESCALA$/i },
+        { key: 'title',        rx: /^PLANO$/i },
+      ];
+
+      metaLabels.forEach(function(def) {
+        var labelItem = metaRow.items.find(i => def.rx.test(i.text.trim()));
+        if (!labelItem) return;
+        // Valor más cercano en X en la fila de valores
+        var closest = metaVals.items.reduce(function(best, vi) {
+          var dist = Math.abs(vi.x - labelItem.x);
+          return (!best || dist < best.dist) ? { dist: dist, text: vi.text } : best;
+        }, null);
+        if (closest && closest.dist < 100 && !FIELD_KEYWORDS.test(closest.text)) {
+          var val = closest.text.trim();
+          if (def.key === 'title') val = val.replace(/SECCIONES.*/i,'').trim().substring(0,100);
+          fieldMap[def.key] = val;
+        }
+      });
+    }
+  }
+
+  // ── ESTRATEGIA 3: busca campos individuales en cualquier línea ──
+  // Para campos que sí vienen como "LABEL : valor" en la misma línea
+  caraRows.forEach(function(row) {
+    var line = row.items.map(i => i.text).join('  ').trim();
+
+    // Detecta pares "LABEL : valor" o "LABEL  valor"
+    var m = line.match(/^(PLANO|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|C[OÓ]DIGO(?:\s+DEL\s+PLANO)?)\s*[:\-]?\s*(.+)/i);
+    if (m) {
+      var lbl = m[1].toUpperCase();
+      var val = m[2].replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/,'').trim();
+      if (!fieldMap['title']        && /PLANO/.test(lbl))        fieldMap['title']        = val.replace(/SECCIONES.*/i,'').trim().substring(0,100);
+      if (!fieldMap['especialidad'] && /ESPECIALIDAD/.test(lbl)) fieldMap['especialidad'] = val.substring(0,70);
+      if (!fieldMap['uso']          && /^USO/.test(lbl))         fieldMap['uso']          = val.substring(0,60);
+      if (!fieldMap['zona']         && /^ZONA/.test(lbl))        fieldMap['zona']         = val.substring(0,60);
+      if (!fieldMap['escala']       && /ESCALA/.test(lbl))       fieldMap['escala']       = val.substring(0,30);
+      if (!fieldMap['code_raw']     && /C.DIGO/.test(lbl))       fieldMap['code_raw']     = val;
+    }
+
+    // FECHA — busca dd/mm/yyyy cerca de la palabra FECHA
+    if (/FECHA/i.test(line)) {
+      var fm = line.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i) || line.match(/(\d{2}\/\d{2}\/\d{4})/);
+      if (fm && !fieldMap['fecha']) fieldMap['fecha'] = fm[1];
+    }
+  });
+
+  // ── CÓDIGO — siempre del texto completo ──
+  var cm = caraText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
+  var code = cm ? cm[1].toUpperCase() : (fieldMap['code_raw'] || filename.replace(/\.pdf$/i,''));
+
+  // ── FECHA fallback ──
   var fecha = fieldMap['fecha'] || '';
   if (!fecha) {
-    var fm = caraText.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i)
-            || caraText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
-    fecha = fm ? fm[1] : '';
-  }
-  // Si fecha es una fecha completa dd/mm/yyyy tómala directamente
-  if (fecha && !fecha.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-    var fm2 = fecha.match(/(\d{2}\/\d{2}\/\d{4})/);
+    var fm2 = caraText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
     fecha = fm2 ? fm2[1] : '';
   }
 
-  // REV — si no está en fieldMap busca en texto
+  // ── REV — busca R01/R02 cerca de "REV" ──
   var rev = fieldMap['rev'] || '';
   if (!rev) {
-    var rm = caraText.match(/\bREV\s*[:\-]?\s*(R\d{2,3})\b/i);
-    rev = rm ? rm[1].toUpperCase() : '';
+    var rm = caraText.match(/\bREV\.?\s*[:\-]?\s*(R\d{2,3})\b/i) || caraText.match(/\b(R0\d)\b/);
+    // Toma la revisión más reciente (mayor número)
+    var allRevs = caraText.match(/\bR0(\d)\b/g);
+    if (allRevs) {
+      allRevs.sort();
+      rev = allRevs[allRevs.length - 1].toUpperCase();
+    } else if (rm) {
+      rev = rm[1].toUpperCase();
+    }
+  }
+
+  // ── NOMBRE DEL PLANO — busca en texto la línea de PLANO ──
+  if (!fieldMap['title']) {
+    var pm = caraText.match(/PLANO\s*[:\s]+([A-ZÁÉÍÓÚ][^\n]{5,80}?)(?=\s+(?:SECCIONES|ESPECIALIDAD|$))/i);
+    if (pm) fieldMap['title'] = pm[1].trim().substring(0,100);
+  }
+
+  // ── ZONA — también puede estar como "SULLANA − DEPARTAMENTO..." ──
+  if (!fieldMap['zona']) {
+    var zm = caraText.match(/ZONA\s*[:\-]?\s*([A-ZÁÉÍÓÚ\-]+(?:\s*[−\-]\s*[A-ZÁÉÍÓÚ\-]+)*)/i);
+    if (zm) fieldMap['zona'] = zm[1].trim().substring(0,60);
+    // Fallback: busca el patrón típico CIUDAD-CIUDAD-DEPARTAMENTO
+    else {
+      var zm2 = caraText.match(/\b(SULLANA[−\-]SULLANA[−\-]PIURA)\b/i);
+      if (zm2) fieldMap['zona'] = zm2[1];
+    }
   }
 
   return {
