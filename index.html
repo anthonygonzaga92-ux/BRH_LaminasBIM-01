@@ -433,18 +433,19 @@ footer span { color: var(--text2); }
     </div>
     <div class="header-right">
       <div class="counter">Láminas: <span id="cnt">0</span></div>
-      <button class="btn" onclick="document.getElementById('fi').click()">
-        ＋ Cargar PDFs
-      </button>
-      <button class="btn btn-danger" onclick="clearAll()">
-        ✕ Limpiar todo
-      </button>
-      <button class="btn btn-primary" onclick="exportCSV()">
-        ↓ CSV
-      </button>
-      <button class="btn" onclick="showDebug()" title="Ver texto crudo del último PDF para diagnóstico">
-        ⚙ Debug
-      </button>
+      <!-- API Key input -->
+      <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);padding:4px 10px;">
+        <span style="font-size:10px;color:var(--text3);white-space:nowrap;font-family:var(--mono)">API KEY</span>
+        <input type="password" id="api-key-input"
+          placeholder="sk-ant-..."
+          style="background:transparent;border:none;outline:none;font-family:var(--mono);font-size:11px;color:var(--text);width:160px;"
+          oninput="localStorage.setItem('brh_apikey',this.value)"
+          value="">
+      </div>
+      <button class="btn" onclick="document.getElementById('fi').click()">＋ Cargar PDFs</button>
+      <button class="btn btn-danger" onclick="clearAll()">✕ Limpiar todo</button>
+      <button class="btn btn-primary" onclick="exportCSV()">↓ CSV</button>
+      <button class="btn" onclick="showDebug()" title="Ver texto crudo del último PDF">⚙ Debug</button>
     </div>
   </header>
 
@@ -458,7 +459,7 @@ footer span { color: var(--text2); }
       <div class="drop-icon">⬆</div>
       <div class="drop-text">
         <strong>Arrastra PDFs aquí o haz clic para seleccionar</strong>
-        <span>Acepta múltiples archivos · Extrae carátula BRH automáticamente</span>
+        <span>Claude AI lee el cajetín y extrae todos los metadatos · Acepta múltiples archivos</span>
       </div>
     </div>
     <input type="file" id="fi" accept=".pdf" multiple style="display:none" onchange="onFileSelect(event)">
@@ -509,6 +510,17 @@ if (typeof pdfjsLib !== 'undefined') {
 // ── STATE ────────────────────────────────────────────────────
 var rows = [];
 var colFilters = {};
+
+// Restaura API key guardada
+window.addEventListener('DOMContentLoaded', function() {
+  var saved = localStorage.getItem('brh_apikey') || '';
+  var inp = document.getElementById('api-key-input');
+  if (inp && saved) inp.value = saved;
+});
+
+function getApiKey() {
+  return (document.getElementById('api-key-input') || {}).value || localStorage.getItem('brh_apikey') || '';
+}
 
 // ── COLUMNS ──────────────────────────────────────────────────
 var COLS = [
@@ -614,240 +626,185 @@ function parse(raw, filename) {
            diseno, dibujo, revision, aprobacion, director, notas: '' };
 }
 
-// ── PDF EXTRACTION — por coordenadas X,Y ─────────────────────
-// En vez de texto lineal, reconstruye filas reales usando posición Y
-// y columnas usando posición X — así la carátula queda como tabla
+// ── CLAUDE API — extrae metadatos del cajetín BRH ────────────
+// Convierte el PDF a base64 y lo manda a Claude con el prompt
+// exacto calibrado con el PDF real 500122-BERH001-740-XX-DR-LS-040041
+
+const CLAUDE_PROMPT = `Analiza el plano en PDF adjunto, enfócate en el cajetín/membrete de la derecha y extrae los metadatos estructurados exactamente en el formato JSON que se detalla a continuación.
+
+Para tu entrenamiento, la estructura semántica de los datos del cajetín sigue este orden y lógica (basado en la lectura de contenedores de texto):
+- Código del Plano (ej. 500122-BERH001-740-XX-DR-LS-040041)
+- Fecha del Plano (ej. 05/06/2026)
+- Revisión Actual (ej. R02)
+- Zona/Componente (ej. 740 - Outflow - 1)
+- Especialidad (ej. ARQUITECTURA Y PAISAJE URBANO)
+- Nombre del Plano (Línea 1: Proyecto, Línea 2: Sub-proyecto, Línea 3: Sector/Red)
+- Responsables y Firmas (Nombre y Fecha de: Diseño, Dibujo, Revisión, Aprobación, Dirección)
+- Historial de Revisiones (Tabla con columnas: Rev, Fecha, Descripción, Revisado Por, Director)
+
+Devuelve ÚNICAMENTE un objeto JSON con la siguiente estructura, sin texto adicional, sin backticks:
+{
+  "metadatos_principales": {
+    "codigo_plano": "string",
+    "fecha": "string (DD/MM/AAAA)",
+    "revision_actual": "string",
+    "zona": "string",
+    "especialidad": "string",
+    "nombre_plano": {
+      "proyecto": "string",
+      "descripcion_situacion": "string",
+      "sector_detalle": "string"
+    }
+  },
+  "responsables": {
+    "diseno": { "nombre": "string", "fecha": "string" },
+    "dibujo": { "nombre": "string", "fecha": "string" },
+    "revision": { "nombre": "string", "fecha": "string" },
+    "aprobacion": { "nombre": "string", "fecha": "string" },
+    "director_proyecto": { "nombre": "string", "fecha": "string" }
+  },
+  "historial_revisiones": [
+    {
+      "rev": "string",
+      "fecha": "string (MM.AAAA)",
+      "descripcion": "string",
+      "revisado_por": "string",
+      "director": "string"
+    }
+  ]
+}`;
 
 async function extractPDF(file) {
+  // Fallback usando nombre del archivo
+  var codeFromName = (file.name.match(/(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})/i)||['',''])[1].toUpperCase();
   var fallback = {
-    code: (file.name.match(/(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})/i)||['',file.name.replace(/\.pdf$/i,'')])[1].toUpperCase(),
+    code: codeFromName || file.name.replace(/\.pdf$/i,''),
     title:'', especialidad:'', uso:'', zona:'', escala:'',
     fecha:'', rev:'', diseno:'', dibujo:'', revision:'',
     aprobacion:'', director:'', notas:''
   };
-  if (typeof pdfjsLib === 'undefined') return fallback;
 
   try {
-    var ab  = await file.arrayBuffer();
-    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    // Convierte el PDF a base64
+    var ab = await file.arrayBuffer();
+    var bytes = new Uint8Array(ab);
+    var binary = '';
+    for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    var base64 = btoa(binary);
 
-    // Extrae TODOS los items con coordenadas X,Y de todas las páginas
-    var allItems = [];
-    for (var p = 1; p <= Math.min(pdf.numPages, 3); p++) {
-      var page  = await pdf.getPage(p);
-      var vp    = page.getViewport({ scale: 1 });
-      var tc    = await page.getTextContent();
-      var pageH = vp.height;
-      tc.items.forEach(function(item) {
-        var s = item.str.trim();
-        if (!s) return;
-        allItems.push({
-          x: Math.round(item.transform[4]),
-          y: Math.round(pageH - item.transform[5]), // 0 = arriba
-          text: s
-        });
-      });
-    }
+    // Llama a Claude API con el PDF como documento
+    var apiKey = getApiKey();
+    if (!apiKey) throw new Error('API key no configurada — ingresa tu clave en el campo API KEY del header');
 
-    // Agrupa en filas por Y (tolerancia 5px)
-    allItems.sort((a,b) => a.y - b.y || a.x - b.x);
-    var rows = [];
-    allItems.forEach(function(item) {
-      var r = rows.find(r => Math.abs(r.y - item.y) <= 5);
-      if (r) r.items.push(item);
-      else rows.push({ y: item.y, items: [item] });
-    });
-    rows.forEach(r => r.items.sort((a,b) => a.x - b.x));
-
-    // Texto completo línea por línea (para debug y fallback regex)
-    var fullText = rows.map(r => r.items.map(i => i.text).join('  ')).join('\n');
-    window._lastRaw = fullText;
-
-    // --- DETECTA LA ZONA DE LA CARÁTULA ---
-    // La carátula BRH siempre tiene estos labels juntos en la misma fila
-    // "DISEÑO  DIBUJO  REVISION  APROBACION  DIRECTOR"
-    // Esa fila define el X mínimo de la carátula
-
-    var equipoRowIdx = -1;
-    rows.forEach(function(row, idx) {
-      var txt = row.items.map(i => i.text).join(' ');
-      var hasDiseno   = /DISEÑO|DISENO/i.test(txt);
-      var hasDibujo   = /DIBUJO/i.test(txt);
-      var hasDirector = /DIRECTOR/i.test(txt);
-      if (hasDiseno && hasDibujo && hasDirector) equipoRowIdx = idx;
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64
+              }
+            },
+            {
+              type: 'text',
+              text: CLAUDE_PROMPT
+            }
+          ]
+        }]
+      })
     });
 
-    // X mínimo de la carátula = X del primer item de la fila de equipo
-    var caraX = equipoRowIdx >= 0
-      ? rows[equipoRowIdx].items[0].x - 2
-      : 0;
+    if (!response.ok) throw new Error('API error: ' + response.status);
 
-    // Filtra filas de la carátula (solo items con X >= caraX)
-    var caraRows = rows
-      .map(r => ({ y: r.y, items: r.items.filter(i => i.x >= caraX) }))
-      .filter(r => r.items.length > 0);
+    var data = await response.json();
+    var raw  = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
 
-    var caraText = caraRows.map(r => r.items.map(i => i.text).join('  ')).join('\n');
-    window._caratulaText = caraText;
+    // Limpia posibles backticks si Claude los incluyó
+    var clean = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+    var json  = JSON.parse(clean);
 
-    // --- PARSEO ---
-    return parseCaratulaBRH(caraRows, equipoRowIdx, caraText, file.name);
+    // Mapea el JSON estructurado a los campos planos de la tabla
+    var m = json.metadatos_principales || {};
+    var r = json.responsables || {};
+    var np = m.nombre_plano || {};
+
+    var title = [np.proyecto, np.descripcion_situacion, np.sector_detalle]
+      .filter(Boolean).join(' · ').substring(0, 150);
+
+    return {
+      code:         m.codigo_plano    || fallback.code,
+      title:        title             || '',
+      especialidad: m.especialidad    || '',
+      uso:          m.zona            || '',   // "zona" del JSON = campo USO de la tabla
+      zona:         '',                        // la zona geográfica viene del cajetín inferior
+      escala:       'INDICADA',
+      fecha:        m.fecha           || '',
+      rev:          m.revision_actual || '',
+      diseno:       (r.diseno         || {}).nombre || '',
+      dibujo:       (r.dibujo         || {}).nombre || '',
+      revision:     (r.revision       || {}).nombre || '',
+      aprobacion:   (r.aprobacion     || {}).nombre || '',
+      director:     (r.director_proyecto || {}).nombre || '',
+      notas:        '',
+      // Guarda el JSON completo para acceso posterior (historial, etc.)
+      _raw: json
+    };
 
   } catch(e) {
-    console.warn('PDF error:', e);
-    return fallback;
+    console.warn('Claude API error:', e.message);
+    // Fallback: intenta extraer el código del texto del PDF con PDF.js
+    return await extractPDFfallback(file, fallback);
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// PARSER BRH v6 — basado en el texto real del debug
-//
-// La carátula BRH tiene esta estructura de filas (de arriba a abajo):
-//
-// [fila equipo-labels]:  DISEÑO  DIBUJO  REVISION  APROBACION  DIRECTOR
-// [fila equipo-valores]: VALERIA CONCHA  CRISTHIAN CARMEN  NORCA ABARCA  CARLOS AQUINO  VICTOR QUIJANDRIA
-// [+ fechas de firma]:   03/06/2026  03/06/2026  05/06/2026  05/06/2026  05/06/2026
-//
-// [fila meta-labels]:  PLANO  ESPECIALIDAD  USO  ZONA  ESCALA  CÓDIGO
-// [fila meta-valores]: PARQUE INUNDABLE...  ARQUITECTURA...  740-Outflow-1  SULLANA...  INDICADA  500122-...
-//
-// [fila fecha-rev]:  FECHA  05/06/2026  REV  R02
-// ─────────────────────────────────────────────────────────────
-
-function parseCaratulaBRH(caraRows, equipoRowIdx, caraText, filename) {
-  var f = {}; // fieldMap
-
-  // ── 1. FILA EQUIPO ──────────────────────────────────────────
-  // Encuentra la fila de labels de equipo dentro de caraRows
-  var eqLabelRow = -1;
-  caraRows.forEach(function(row, idx) {
-    var txt = row.items.map(i => i.text).join(' ');
-    if (/DISEÑO|DISENO/i.test(txt) && /DIBUJO/i.test(txt)) eqLabelRow = idx;
-  });
-
-  if (eqLabelRow >= 0) {
-    var labRow = caraRows[eqLabelRow];
-
-    // Los valores están en la fila ANTERIOR (justo encima en Y)
-    // Busca hasta 3 filas antes para encontrar la de nombres
-    for (var k = 1; k <= 3; k++) {
-      var prevRow = caraRows[eqLabelRow - k];
-      if (!prevRow) continue;
-      var prevTxt = prevRow.items.map(i => i.text).join(' ');
-      // Fila de nombres: tiene apellidos/nombres, no labels
-      if (/[A-ZÁÉÍÓÚ][a-záéíóúñ]{2,}/.test(prevTxt) && !/ESPECIALIDAD|PLANO|CODIGO/i.test(prevTxt)) {
-        // Mapea por posición X más cercana
-        labRow.items.forEach(function(lab) {
-          var label = lab.text.trim().toUpperCase().replace(/\.$/, '');
-          var closest = prevRow.items.reduce(function(best, vi) {
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(vi.text)) return best; // ignora fechas
-            var d = Math.abs(vi.x - lab.x);
-            return (!best || d < best.d) ? { d: d, text: vi.text } : best;
-          }, null);
-          if (!closest || closest.d > 120) return;
-          var val = closest.text.trim();
-          if      (/DISE/i.test(label))    f.diseno     = val;
-          else if (/DIBUJO/i.test(label))  f.dibujo     = val;
-          else if (/REVISI/i.test(label))  f.revision   = val;
-          else if (/APROBAC/i.test(label)) f.aprobacion = val;
-          else if (/DIRECTOR/i.test(label))f.director   = val;
-        });
-        break;
-      }
-    }
-  }
-
-  // ── 2. FILA META (PLANO / ESPECIALIDAD / USO / ZONA / ESCALA / CÓDIGO) ──
-  var metaLabelRow = -1;
-  caraRows.forEach(function(row, idx) {
-    var txt = row.items.map(i => i.text).join(' ');
-    if (/ESPECIALIDAD/i.test(txt) && /USO/i.test(txt) && /ZONA/i.test(txt)) metaLabelRow = idx;
-  });
-
-  if (metaLabelRow >= 0) {
-    var mLabRow = caraRows[metaLabelRow];
-    // Valores: busca hasta 2 filas antes
-    for (var j = 1; j <= 2; j++) {
-      var mValRow = caraRows[metaLabelRow - j];
-      if (!mValRow) continue;
-      var mValTxt = mValRow.items.map(i => i.text).join(' ');
-      if (/ESPECIALIDAD|USO|ZONA|FECHA|DISEÑO/i.test(mValTxt)) continue; // es otra fila de labels
-
-      mLabRow.items.forEach(function(lab) {
-        var label = lab.text.trim().toUpperCase();
-        var closest = mValRow.items.reduce(function(best, vi) {
-          var d = Math.abs(vi.x - lab.x);
-          return (!best || d < best.d) ? { d: d, text: vi.text } : best;
-        }, null);
-        if (!closest || closest.d > 120) return;
-        var val = closest.text.trim();
-        if      (/^PLANO$/i.test(label))        f.title        = val.replace(/SECCIONES.*/i,'').trim().substring(0,100);
-        else if (/ESPECIALIDAD/i.test(label))   f.especialidad = val.substring(0,70);
-        else if (/^USO$/i.test(label))          f.uso          = val.substring(0,60);
-        else if (/^ZONA$/i.test(label))         f.zona         = val.substring(0,60);
-        else if (/^ESCALA$/i.test(label))       f.escala       = val.substring(0,30);
-        else if (/C.DIGO/i.test(label))         f.code_raw     = val;
+// ── FALLBACK: PDF.js si la API falla ─────────────────────────
+async function extractPDFfallback(file, fallback) {
+  if (typeof pdfjsLib === 'undefined') return fallback;
+  try {
+    var ab  = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    var allItems = [];
+    for (var p = 1; p <= Math.min(pdf.numPages, 2); p++) {
+      var page = await pdf.getPage(p);
+      var vp   = page.getViewport({ scale: 1 });
+      var tc   = await page.getTextContent();
+      tc.items.forEach(function(item) {
+        var s = item.str.trim();
+        if (s) allItems.push({ x: Math.round(item.transform[4]), y: Math.round(vp.height - item.transform[5]), text: s });
       });
-      break;
     }
+    allItems.sort((a,b) => a.y - b.y || a.x - b.x);
+    var fullText = allItems.map(i => i.text).join(' ');
+    window._lastRaw = fullText;
+
+    // Solo extrae código y fecha como mínimo
+    var cm = fullText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
+    var fm = fullText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+    var rm = fullText.match(/\b(R0\d)\b/gi);
+    if (rm) { rm.sort(); }
+
+    return {
+      ...fallback,
+      code:  cm ? cm[1].toUpperCase() : fallback.code,
+      fecha: fm ? fm[1] : '',
+      rev:   rm ? rm[rm.length-1].toUpperCase() : '',
+    };
+  } catch(e) {
+    return fallback;
   }
-
-  // ── 3. FECHA y REV — busca en todas las líneas ──────────────
-  caraRows.forEach(function(row) {
-    var line = row.items.map(i => i.text).join('  ');
-
-    // FECHA : 05/06/2026
-    if (!f.fecha) {
-      var fm = line.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i);
-      if (fm) f.fecha = fm[1];
-    }
-    // REV : R02 (busca el más alto)
-    var rm = line.match(/\b(R0\d)\b/gi);
-    if (rm) {
-      rm.sort(); // R00 < R01 < R02
-      var latest = rm[rm.length - 1].toUpperCase();
-      if (!f.rev || latest > f.rev) f.rev = latest;
-    }
-  });
-
-  // Fallback fecha — primera dd/mm/yyyy del texto
-  if (!f.fecha) {
-    var fm2 = caraText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
-    if (fm2) f.fecha = fm2[1];
-  }
-
-  // ── 4. CÓDIGO — siempre del texto completo ──────────────────
-  var cm = caraText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
-  var code = cm ? cm[1].toUpperCase() : (f.code_raw || filename.replace(/\.pdf$/i,''));
-
-  // ── 5. NOMBRE DEL PLANO — fallback regex ────────────────────
-  if (!f.title) {
-    var pm = caraText.match(/PLANO\s*:?\s*([A-ZÁÉÍÓÚ][^\n]{5,}?)(?:\s+SECCIONES|\s+ESPECIALIDAD|$)/im);
-    if (pm) f.title = pm[1].trim().substring(0,100);
-  }
-
-  // ── 6. ZONA — fallback: patrón CIUDAD-CIUDAD-DEPTO ──────────
-  if (!f.zona) {
-    var zm = caraText.match(/\b([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚ\-−]+[−\-][A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚ\-−]+[−\-][A-ZÁÉÍÓÚ]+)\b/);
-    if (zm) f.zona = zm[1];
-  }
-
-  return {
-    code:         code,
-    title:        f.title        || '',
-    especialidad: f.especialidad || '',
-    uso:          f.uso          || '',
-    zona:         f.zona         || '',
-    escala:       f.escala       || '',
-    fecha:        f.fecha        || '',
-    rev:          f.rev          || '',
-    diseno:       f.diseno       || '',
-    dibujo:       f.dibujo       || '',
-    revision:     f.revision     || '',
-    aprobacion:   f.aprobacion   || '',
-    director:     f.director     || '',
-    notas:        ''
-  };
 }
 
 // ── FILE HANDLING ─────────────────────────────────────────────
