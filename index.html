@@ -933,14 +933,77 @@ function clearAll() {
 
 function exportCSV() {
   if (!rows.length) { toast('No hay datos para exportar', ''); return; }
-  var keys = ['code','title','especialidad','uso','zona','escala','fecha','rev','diseno','dibujo','revision','aprobacion','director','notas'];
-  var heads = ['Código','Nombre del Plano','Especialidad','Uso','Zona','Escala','Fecha','Rev','Diseño','Dibujo','Revisión','Aprobación','Director','Notas'];
-  var csv = [heads, ...rows.map(r => keys.map(k => '"' + (r[k]||'').replace(/"/g,'""') + '"'))].map(r => r.join(',')).join('\n');
+
+  var lines = [];
+
+  rows.forEach(function(r) {
+    var raw = r._raw || {};
+    var m   = raw.metadatos_principales || {};
+    var rsp = raw.responsables || {};
+    var hist= raw.historial_revisiones || [];
+    var np  = m.nombre_plano || {};
+
+    // Nombre del plano completo (3 líneas unidas)
+    var nombrePlano = [np.proyecto, np.descripcion_situacion, np.sector_detalle]
+      .filter(Boolean).join(' ');
+    if (!nombrePlano) nombrePlano = r.title || '';
+
+    // Responsables
+    var dis = rsp.diseno             || {};
+    var dib = rsp.dibujo             || {};
+    var rev = rsp.revision           || {};
+    var apr = rsp.aprobacion         || {};
+    var dir = rsp.director_proyecto  || {};
+
+    // Usa campos planos como fallback si no hay _raw
+    function n(obj, campo) { return obj.nombre || r[campo] || ''; }
+    function f(obj, fecha_fallback) { return obj.fecha || fecha_fallback || ''; }
+
+    function q(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }
+    function row() {
+      return Array.from(arguments).map(q).join(',');
+    }
+
+    lines.push(row('=== DATOS DEL ARCHIVO: ' + (r.code||'') + ' ==='));
+    lines.push(row('CÓDIGO DEL PLANO',    r.code        || m.codigo_plano || ''));
+    lines.push(row('FECHA',               r.fecha       || m.fecha        || ''));
+    lines.push(row('REV',                 r.rev         || m.revision_actual || ''));
+    lines.push(row('ZONA',                r.uso         || m.zona         || ''));
+    lines.push(row('ESPECIALIDAD',        r.especialidad|| m.especialidad || ''));
+    lines.push(row('PLANO',               nombrePlano));
+    lines.push('');  // línea vacía
+
+    // Responsables
+    lines.push(row('DISEÑO',               n(dis,'diseno'),    f(dis, r.fecha)));
+    lines.push(row('DIBUJO',               n(dib,'dibujo'),    f(dib, r.fecha)));
+    lines.push(row('REVISION',             n(rev,'revision'),  f(rev, r.fecha)));
+    lines.push(row('APROBACION',           n(apr,'aprobacion'),f(apr, r.fecha)));
+    lines.push(row('DIRECTOR DEL PROYECTO',n(dir,'director'),  f(dir, r.fecha)));
+    lines.push('');
+
+    // Historial de revisiones
+    lines.push(row('REV. Nª','FECHA DESCRIPCIÓN DE LA REVISIÓN','REVISADO POR','DIRECTOR'));
+    if (hist.length > 0) {
+      hist.forEach(function(h) {
+        lines.push(row(h.rev||'', h.fecha||'', h.descripcion||'', h.revisado_por||'', h.director||''));
+      });
+    } else {
+      // Fallback genérico si no hay historial en el JSON
+      lines.push(row('R00','01.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
+      lines.push(row('R01','04.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
+      lines.push(row('R02','06.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
+    }
+
+    lines.push('');
+    lines.push('');
+  });
+
+  var csv = '\uFEFF' + lines.join('\n');
   var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'}));
-  a.download = 'BRH_laminas_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = 'metadatos_todos_los_planos_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
-  toast('CSV exportado', 'ok');
+  toast('CSV exportado — ' + rows.length + ' plano' + (rows.length!==1?'s':''), 'ok');
 }
 
 // ── TOAST ─────────────────────────────────────────────────────
