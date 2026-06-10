@@ -362,6 +362,14 @@ Devuelve ÚNICAMENTE este JSON sin texto adicional, sin backticks:
   ]
 }`;
 
+// ── LOG PERSISTENTE ───────────────────────────────────────────
+var _logs = [];
+function addLog(type, msg) {
+  var ts = new Date().toLocaleTimeString('es-PE');
+  _logs.push({ ts, type, msg });
+  console.log('[BRH ' + type + ']', msg);
+}
+
 // ── EXTRACCIÓN CON CLAUDE API ─────────────────────────────────
 async function extractPDF(file) {
   var codeFromName = (file.name.match(/(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})/i)||['',''])[1].toUpperCase();
@@ -371,15 +379,21 @@ async function extractPDF(file) {
     rev:'', fecha:'', _raw: null
   };
 
+  addLog('INFO', 'Iniciando: ' + file.name + ' (' + (file.size/1024).toFixed(0) + ' KB)');
+
   try {
     var ab = await file.arrayBuffer();
     var bytes = new Uint8Array(ab);
     var binary = '';
     for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     var base64 = btoa(binary);
+    addLog('INFO', 'PDF convertido a base64: ' + base64.length + ' chars');
 
     var apiKey = getApiKey();
-    if (!apiKey) throw new Error('API key no configurada');
+    if (!apiKey) throw new Error('API key no configurada — ingresa tu clave sk-ant-... en el campo API KEY');
+
+    addLog('INFO', 'API key detectada: ' + apiKey.substring(0,12) + '...');
+    addLog('INFO', 'Llamando a Claude API...');
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -402,17 +416,37 @@ async function extractPDF(file) {
       })
     });
 
-    if (!response.ok) throw new Error('API error: ' + response.status);
+    addLog(response.ok ? 'OK' : 'ERR', 'HTTP ' + response.status + ' ' + response.statusText);
+
+    if (!response.ok) {
+      var errBody = await response.text();
+      addLog('ERR', 'Respuesta de error: ' + errBody.substring(0, 300));
+      throw new Error('API HTTP ' + response.status + ': ' + errBody.substring(0,120));
+    }
 
     var data = await response.json();
     var raw  = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    addLog('OK', 'Respuesta recibida (' + raw.length + ' chars)');
+
     var clean = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-    var json  = JSON.parse(clean);
+
+    var json;
+    try {
+      json = JSON.parse(clean);
+      addLog('OK', 'JSON parseado correctamente');
+    } catch(pe) {
+      addLog('ERR', 'JSON parse error: ' + pe.message);
+      addLog('ERR', 'Texto recibido: ' + clean.substring(0,200));
+      throw pe;
+    }
 
     // Guarda para debug
     window._lastJSON = json;
 
     var np = json.nombre_plano || {};
+    addLog('OK', 'nombre_plano.linea1: "' + (np.linea1||'VACÍO') + '"');
+    addLog('OK', 'nombre_plano.linea2: "' + (np.linea2||'VACÍO') + '"');
+    addLog('OK', 'nombre_plano.linea3: "' + (np.linea3||'VACÍO') + '"');
 
     return {
       code:   json.codigo_plano    || fallback.code,
@@ -427,9 +461,10 @@ async function extractPDF(file) {
     };
 
   } catch(e) {
-    console.warn('Claude API error:', e.message);
-    toast('Error: ' + e.message, 'err');
+    addLog('ERR', 'FALLO: ' + e.message);
+    toast('⚠ ' + e.message, 'err');
     // Intento fallback rápido con PDF.js (solo código y fecha)
+    addLog('INFO', 'Usando fallback PDF.js (sin nombre del plano)');
     return await extractFallback(file, fallback);
   }
 }
@@ -641,11 +676,16 @@ function exportCSV() {
 
 // ── DEBUG ──────────────────────────────────────────────────────
 function showDebug() {
-  var json = window._lastJSON || null;
-  document.getElementById('dbg-txt').value = json
-    ? JSON.stringify(json, null, 2)
-    : 'Aún no se ha procesado ningún PDF.';
-  document.getElementById('dbg-overlay').style.display = 'flex';
+  var logStr = _logs && _logs.length
+    ? _logs.map(function(l){ return "["+l.ts+"] ["+l.type+"] "+l.msg; }).join("\n")
+    : "(sin logs — carga un PDF primero)";
+  var jsonStr = window._lastJSON
+    ? JSON.stringify(window._lastJSON, null, 2)
+    : "(Claude no devolvió JSON — ver logs arriba)";
+  document.getElementById("dbg-txt").value =
+    "=== LOG DE PROCESO ===\n" + logStr +
+    "\n\n=== JSON ÚLTIMO PDF ===\n" + jsonStr;
+  document.getElementById("dbg-overlay").style.display = "flex";
 }
 
 // ── TOAST ──────────────────────────────────────────────────────
