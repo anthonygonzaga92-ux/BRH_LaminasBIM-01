@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BRH · Registro de Láminas</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -17,7 +16,6 @@
   --text:     #1a1917;
   --text2:    #6b6860;
   --text3:    #a8a49e;
-  --accent:   #1a1917;
   --green:    #2a7a4b;
   --green-bg: #edf7f1;
   --amber:    #8a5a00;
@@ -38,15 +36,9 @@ html, body {
   line-height: 1.5;
 }
 
-/* ── LAYOUT ── */
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-/* ── HEADER ── */
+/* HEADER */
 header {
   display: flex;
   align-items: center;
@@ -57,80 +49,42 @@ header {
   flex-shrink: 0;
 }
 
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand-title { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+.brand-sub { font-size: 11px; color: var(--text3); letter-spacing: 0.02em; }
 
-.brand-title {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  letter-spacing: 0.04em;
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: var(--text3);
-  letter-spacing: 0.02em;
-}
-
-.header-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 .counter {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text3);
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--bg);
+  font-family: var(--mono); font-size: 11px; color: var(--text3);
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg);
+}
+.counter span { color: var(--text); font-weight: 500; }
+
+.apikey-wrap {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: var(--r); padding: 4px 10px;
+}
+.apikey-wrap span { font-size: 10px; color: var(--text3); white-space: nowrap; font-family: var(--mono); }
+.apikey-wrap input {
+  background: transparent; border: none; outline: none;
+  font-family: var(--mono); font-size: 11px; color: var(--text); width: 160px;
 }
 
-.counter span {
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* ── BUTTONS ── */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: var(--r);
-  cursor: pointer;
-  transition: all 0.12s;
-  border: 1px solid var(--border2);
-  background: var(--surface);
-  color: var(--text2);
-  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; font-family: var(--sans); font-size: 12px; font-weight: 500;
+  border-radius: var(--r); cursor: pointer; transition: all 0.12s;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2); white-space: nowrap;
 }
-
 .btn:hover { background: var(--bg); color: var(--text); border-color: var(--text); }
-
-.btn-primary {
-  background: var(--text);
-  border-color: var(--text);
-  color: #fff;
-}
-
+.btn-primary { background: var(--text); border-color: var(--text); color: #fff; }
 .btn-primary:hover { background: #333; color: #fff; border-color: #333; }
-
-.btn-danger { color: var(--red); border-color: var(--border2); }
+.btn-danger { color: var(--red); }
 .btn-danger:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
 
-/* ── DROP ZONE ── */
+/* DROP ZONE */
 .drop-section {
   padding: 16px 28px;
   background: var(--surface);
@@ -139,293 +93,149 @@ header {
 }
 
 .drop-zone {
-  border: 1.5px dashed var(--border2);
-  border-radius: 6px;
-  padding: 20px 28px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--bg);
+  border: 1.5px dashed var(--border2); border-radius: 6px;
+  padding: 20px 28px; display: flex; align-items: center; gap: 20px;
+  cursor: pointer; transition: all 0.15s; background: var(--bg);
 }
+.drop-zone:hover, .drop-zone.over { border-color: var(--text); background: #f0efeb; }
+.drop-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.drop-text strong { display: block; font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+.drop-text span { font-size: 11px; color: var(--text3); font-family: var(--mono); }
 
-.drop-zone:hover,
-.drop-zone.over {
-  border-color: var(--text);
-  background: #f0efeb;
-}
-
-.drop-icon {
-  font-size: 24px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.drop-text {
-  flex: 1;
-}
-
-.drop-text strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-.drop-text span {
-  font-size: 11px;
-  color: var(--text3);
-  font-family: var(--mono);
-}
-
-/* ── PROGRESS ── */
+/* PROGRESS */
 .progress-wrap {
-  display: none;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 28px;
-  background: var(--amber-bg);
-  border-bottom: 1px solid #e8d8a0;
-  flex-shrink: 0;
+  display: none; align-items: center; gap: 12px;
+  padding: 10px 28px; background: var(--amber-bg);
+  border-bottom: 1px solid #e8d8a0; flex-shrink: 0;
 }
-
 .progress-wrap.show { display: flex; }
+.progress-label { font-size: 11px; font-family: var(--mono); color: var(--amber); min-width: 260px; }
+.progress-track { flex: 1; height: 3px; background: #e8d8a0; border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--amber); border-radius: 2px; transition: width 0.3s; }
 
-.progress-label {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--amber);
-  min-width: 260px;
-}
-
-.progress-track {
-  flex: 1;
-  height: 3px;
-  background: #e8d8a0;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--amber);
-  border-radius: 2px;
-  transition: width 0.3s;
-}
-
-/* ── TABLE AREA ── */
-.table-area {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-
-.table-scroll {
-  flex: 1;
-  overflow-x: auto;
-  overflow-y: auto;
-}
-
+/* TABLE */
+.table-area { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.table-scroll { flex: 1; overflow-x: auto; overflow-y: auto; }
 .table-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
 .table-scroll::-webkit-scrollbar-track { background: var(--bg); }
 .table-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-.table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1800px;
-  font-size: 12px;
-}
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
 
-/* ── TABLE HEAD ── */
-thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
+thead { position: sticky; top: 0; z-index: 10; }
 
 thead tr:first-child th {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 11px 14px;
-  text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text3);
-  white-space: nowrap;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 11px 14px; text-align: left; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); white-space: nowrap;
 }
 
+/* Sticky primera columna en header */
 thead tr:first-child th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 11;
-  background: var(--surface);
+  position: sticky; left: 0; z-index: 11; background: var(--surface);
 }
 
-/* ── FILTER ROW ── */
 thead tr.filter-row th {
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  padding: 5px 8px;
+  background: var(--bg); border-bottom: 1px solid var(--border); padding: 5px 8px;
 }
-
 thead tr.filter-row th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 11;
-  background: var(--bg);
+  position: sticky; left: 0; z-index: 11; background: var(--bg);
 }
 
 .fi {
-  width: 100%;
-  padding: 5px 8px;
-  font-size: 11px;
-  font-family: var(--sans);
-  border: 1px solid transparent;
-  border-radius: var(--r);
-  background: transparent;
-  color: var(--text2);
-  outline: none;
-  min-width: 80px;
-  transition: all 0.12s;
+  width: 100%; padding: 5px 8px; font-size: 11px; font-family: var(--sans);
+  border: 1px solid transparent; border-radius: var(--r); background: transparent;
+  color: var(--text2); outline: none; transition: all 0.12s;
 }
-
-.fi:focus {
-  border-color: var(--border2);
-  background: var(--surface);
-  color: var(--text);
-}
-
+.fi:focus { border-color: var(--border2); background: var(--surface); color: var(--text); }
 .fi::placeholder { color: var(--text3); }
 
-/* ── TABLE BODY ── */
-tbody tr {
-  border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
-  cursor: default;
-}
-
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
 tbody tr:hover { background: #f0efeb; }
 tbody tr:last-child { border-bottom: none; }
 
 td {
-  padding: 10px 14px;
-  color: var(--text2);
-  white-space: nowrap;
-  vertical-align: middle;
+  padding: 12px 14px; color: var(--text2); vertical-align: top;
 }
 
+/* Columna CÓDIGO sticky */
 td:first-child {
-  position: sticky;
-  left: 0;
-  background: var(--surface);
-  z-index: 5;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text);
-  border-right: 1px solid var(--border);
+  position: sticky; left: 0; background: var(--surface); z-index: 5;
+  font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text);
+  border-right: 1px solid var(--border); white-space: nowrap;
 }
-
 tbody tr:hover td:first-child { background: #f0efeb; }
 
-td.clip {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Columna NOMBRE: permite wrap para mostrar las 3 líneas */
+td.nombre-cell {
+  max-width: 360px;
+  min-width: 260px;
+  white-space: normal;
+  line-height: 1.55;
 }
 
-.rev-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 2px;
+.nombre-linea1 {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 12px;
+  display: block;
+}
+.nombre-linea2 {
+  font-size: 11px;
+  color: var(--text2);
+  display: block;
+  margin-top: 2px;
+}
+.nombre-linea3 {
   font-family: var(--mono);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  color: var(--text3);
+  display: block;
+  margin-top: 2px;
 }
 
+/* Columnas REV y FECHA: compact */
+td.rev-cell, td.fecha-cell { white-space: nowrap; vertical-align: middle; }
+
+.rev-pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 2px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.04em;
+}
 .rev-r0 { background: var(--bg); color: var(--text3); border: 1px solid var(--border2); }
 .rev-r1 { background: var(--amber-bg); color: var(--amber); border: 1px solid #e8d8a0; }
 .rev-r2 { background: var(--green-bg); color: var(--green); border: 1px solid #b8dfc8; }
 
-/* ── EMPTY STATE ── */
+/* EMPTY */
 .empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--text3);
-  padding: 60px 20px;
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; color: var(--text3); padding: 60px 20px;
 }
+.empty-icon { font-size: 36px; opacity: 0.4; }
+.empty p { font-size: 13px; text-align: center; max-width: 280px; line-height: 1.6; }
 
-.empty-icon {
-  font-size: 36px;
-  line-height: 1;
-  opacity: 0.4;
-}
-
-.empty p {
-  font-size: 13px;
-  text-align: center;
-  max-width: 280px;
-  line-height: 1.6;
-}
-
-/* ── TOAST ── */
+/* TOAST */
 .toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: var(--text);
-  color: #fff;
-  font-size: 12px;
-  font-family: var(--sans);
-  padding: 10px 16px;
-  border-radius: var(--r);
-  z-index: 999;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: all 0.22s;
-  pointer-events: none;
-  max-width: 300px;
+  position: fixed; bottom: 24px; right: 24px; background: var(--text); color: #fff;
+  font-size: 12px; padding: 10px 16px; border-radius: var(--r); z-index: 999;
+  opacity: 0; transform: translateY(6px); transition: all 0.22s; pointer-events: none; max-width: 300px;
 }
-
 .toast.ok { background: var(--green); }
 .toast.err { background: var(--red); }
 .toast.show { opacity: 1; transform: translateY(0); }
 
-/* ── FOOTER ── */
+/* FOOTER */
 footer {
-  padding: 8px 28px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 10px;
-  font-family: var(--mono);
-  color: var(--text3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
+  padding: 8px 28px; border-top: 1px solid var(--border); background: var(--surface);
+  font-size: 10px; font-family: var(--mono); color: var(--text3);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
-
 footer span { color: var(--text2); }
 </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- HEADER -->
   <header>
     <div class="brand">
       <div class="brand-title">BRH · LÁMINAS</div>
@@ -433,23 +243,18 @@ footer span { color: var(--text2); }
     </div>
     <div class="header-right">
       <div class="counter">Láminas: <span id="cnt">0</span></div>
-      <!-- API Key input -->
-      <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--r);padding:4px 10px;">
-        <span style="font-size:10px;color:var(--text3);white-space:nowrap;font-family:var(--mono)">API KEY</span>
-        <input type="password" id="api-key-input"
-          placeholder="sk-ant-..."
-          style="background:transparent;border:none;outline:none;font-family:var(--mono);font-size:11px;color:var(--text);width:160px;"
-          oninput="localStorage.setItem('brh_apikey',this.value)"
-          value="">
+      <div class="apikey-wrap">
+        <span>API KEY</span>
+        <input type="password" id="api-key-input" placeholder="sk-ant-..."
+          oninput="localStorage.setItem('brh_apikey',this.value)">
       </div>
       <button class="btn" onclick="document.getElementById('fi').click()">＋ Cargar PDFs</button>
       <button class="btn btn-danger" onclick="clearAll()">✕ Limpiar todo</button>
       <button class="btn btn-primary" onclick="exportCSV()">↓ CSV</button>
-      <button class="btn" onclick="showDebug()" title="Ver texto crudo del último PDF">⚙ Debug</button>
+      <button class="btn" onclick="showDebug()" title="Ver JSON crudo del último PDF">⚙ Debug</button>
     </div>
   </header>
 
-  <!-- DROP ZONE -->
   <div class="drop-section">
     <div class="drop-zone" id="dz"
       onclick="document.getElementById('fi').click()"
@@ -459,13 +264,12 @@ footer span { color: var(--text2); }
       <div class="drop-icon">⬆</div>
       <div class="drop-text">
         <strong>Arrastra PDFs aquí o haz clic para seleccionar</strong>
-        <span>Claude AI lee el cajetín y extrae todos los metadatos · Acepta múltiples archivos</span>
+        <span>Claude AI lee el cajetín y extrae código · nombre del plano · revisión · fecha</span>
       </div>
     </div>
     <input type="file" id="fi" accept=".pdf" multiple style="display:none" onchange="onFileSelect(event)">
   </div>
 
-  <!-- PROGRESS -->
   <div class="progress-wrap" id="prog">
     <div class="progress-label" id="prog-lbl">Procesando...</div>
     <div class="progress-track">
@@ -473,7 +277,6 @@ footer span { color: var(--text2); }
     </div>
   </div>
 
-  <!-- TABLE / EMPTY -->
   <div class="table-area" id="table-area">
     <div class="empty" id="empty-state">
       <div class="empty-icon">⬚</div>
@@ -483,35 +286,33 @@ footer span { color: var(--text2); }
 
 </div>
 
-<!-- FOOTER -->
 <footer>
   <span>BRH Match · Gonzaga Arquitectos</span>
   <span id="ft-time">—</span>
 </footer>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script>
-// ── PDF.js setup ─────────────────────────────────────────────
-if (typeof pdfjsLib !== 'undefined') {
-  try {
-    var wb = new Blob(
-      ['importScripts("https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js");'],
-      { type: 'application/javascript' }
-    );
-    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(wb);
-  } catch(e) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
-  }
-}
+<!-- DEBUG MODAL -->
+<div id="dbg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid #ccc;border-radius:6px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+    <div style="padding:14px 18px;border-bottom:1px solid #e2e0db;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:var(--mono);font-size:12px;font-weight:500">JSON extraído por Claude (última lámina)</span>
+      <button onclick="document.getElementById('dbg-overlay').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:#999">×</button>
+    </div>
+    <textarea id="dbg-txt" readonly style="flex:1;padding:14px;font-family:var(--mono);font-size:11px;color:#333;border:none;resize:none;outline:none;overflow:auto;min-height:300px;background:#f7f6f3;line-height:1.7"></textarea>
+    <div style="padding:10px 18px;border-top:1px solid #e2e0db;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('dbg-txt').value);toast('Copiado','ok')">Copiar</button>
+      <button class="btn" onclick="document.getElementById('dbg-overlay').style.display='none'">Cerrar</button>
+    </div>
+  </div>
+</div>
 
-// ── STATE ────────────────────────────────────────────────────
+<script>
+// ── ESTADO ───────────────────────────────────────────────────
 var rows = [];
 var colFilters = {};
 
-// Restaura API key guardada
 window.addEventListener('DOMContentLoaded', function() {
   var saved = localStorage.getItem('brh_apikey') || '';
   var inp = document.getElementById('api-key-input');
@@ -519,182 +320,66 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 function getApiKey() {
-  return (document.getElementById('api-key-input') || {}).value || localStorage.getItem('brh_apikey') || '';
+  return (document.getElementById('api-key-input') || {}).value
+      || localStorage.getItem('brh_apikey') || '';
 }
 
-// ── COLUMNS ──────────────────────────────────────────────────
+// ── COLUMNAS (solo 4) ─────────────────────────────────────────
 var COLS = [
-  { key: 'code',         label: 'Código',              w: '200px' },
-  { key: 'title',        label: 'Nombre del Plano',    w: '190px' },
-  { key: 'especialidad', label: 'Especialidad',         w: '170px' },
-  { key: 'uso',          label: 'Uso',                  w: '140px' },
-  { key: 'zona',         label: 'Zona',                 w: '155px' },
-  { key: 'escala',       label: 'Escala',               w: '90px'  },
-  { key: 'fecha',        label: 'Fecha',                w: '95px'  },
-  { key: 'rev',          label: 'Rev',                  w: '65px'  },
-  { key: 'diseno',       label: 'Diseño',               w: '140px' },
-  { key: 'dibujo',       label: 'Dibujo',               w: '140px' },
-  { key: 'revision',     label: 'Revisión',             w: '140px' },
-  { key: 'aprobacion',   label: 'Aprobación',           w: '140px' },
-  { key: 'director',     label: 'Director',             w: '150px' },
-  { key: 'notas',        label: 'Notas',                w: '160px' },
+  { key: 'code',  label: 'Código',          w: '220px' },
+  { key: 'title', label: 'Nombre del Plano', w: '360px' },
+  { key: 'rev',   label: 'Rev',              w: '70px'  },
+  { key: 'fecha', label: 'Fecha',            w: '100px' },
 ];
 
-// ── PARSER BRH v4 ────────────────────────────────────────────
-// Robusto: funciona con o sin ":" separador
-// Acepta tanto "CAMPO : valor" como "CAMPO valor"
+// ── PROMPT CLAUDE ─────────────────────────────────────────────
+var CLAUDE_PROMPT = `Analiza el plano PDF adjunto. Enfócate en el cajetín/membrete (zona derecha o inferior del plano) y extrae los metadatos indicados.
 
-var KL = 'PLANO|ESPECIALIDAD|USO|ZONA|ESCALA|FECHA|REVISION|REVISIÓN|CODIGO DEL PLANO|CÓDIGO DEL PLANO|CODIGO|DISEÑO|DISENO|DIBUJO|APROBACION|APROBACIÓN|DIRECTOR DEL PROYECTO|DIRECTOR|SECCIONES|SITUACION|ROGGIO|ANIN|PERU';
+El campo PLANO en el cajetín tiene 2 o 3 líneas de texto:
+- Línea 1 (proyecto): nombre principal del plano, por ejemplo "ESTANQUE VERDE ADUS 1"
+- Línea 2 (descripcion): subtítulo descriptivo, por ejemplo "PLANTA GENERAL DE PAISAJE"
+- Línea 3 (sector): sector o red, por ejemplo "SECTOR 4 – COLA DE ALACRÁN 1 (REDES)"
 
-// Extrae campo: primero intenta con ":", luego sin ":"
-function xf(rx, t, max) {
-  max = max || 80;
-  // Con separador ":" o "-"
-  var p1 = new RegExp(rx + '\\s*[:\\-]\\s*(.+?)(?=\\s+(?:' + KL + ')\\s*[:\\-\\s]|$)', 'i');
-  var m1 = t.match(p1);
-  if (m1) return m1[1].trim().substring(0, max);
-  // Sin separador — label seguido de espacio + valor
-  var p2 = new RegExp(rx + '\\s+(.+?)(?=\\s+(?:' + KL + ')\\s|$)', 'i');
-  var m2 = t.match(p2);
-  return m2 ? m2[1].trim().substring(0, max) : '';
-}
-
-function stripDate(v) {
-  return v.replace(/\s+\d{2}\/\d{2}\/\d{2,4}\s*$/, '').trim();
-}
-
-function parse(raw, filename) {
-  var t = raw.replace(/\r\n|\r|\n/g, ' § ').replace(/\s+/g, ' ').trim();
-
-  // DEBUG — guarda el texto para diagnóstico
-  window._lastRaw = t;
-
-  // CÓDIGO — patrón BRH
-  var cm = t.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i)
-          || t.match(/-(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
-  var code = cm ? cm[1].toUpperCase() : filename.replace(/\.pdf$/i, '');
-
-  // NOMBRE — entre PLANO y SECCIONES/ESPECIALIDAD
-  var title = '';
-  var pm = t.match(/PLANO\s*[:\-]?\s*(.+?)(?=\s+(?:SECCIONES\s+GENERALES|SITUACI[OÓ]N|ESPECIALIDAD|USO|ZONA|§|$))/i)
-          || t.match(/PLANO\s+(.+?)(?=\s+SECCIONES|\s+ESPECIALIDAD|\s+USO|$)/i);
-  if (pm) title = pm[1].replace(/SECCIONES.*/i,'').replace(/§/g,' ').trim().substring(0,100);
-
-  // ESPECIALIDAD
-  var especialidad = xf('ESPECIALIDAD', t, 70);
-
-  // USO
-  var uso = '';
-  var um = t.match(/\bUSO\s*[:\-]?\s*(.+?)(?=\s+(?:ZONA|ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
-  if (um) uso = um[1].replace(/§/g,' ').trim().substring(0,60);
-
-  // ZONA
-  var zona = '';
-  var zm = t.match(/ZONA\s*[:\-]?\s*(.+?)(?=\s+(?:ESCALA|FECHA|CODIGO|DISEÑO|DISENO|§|$))/i);
-  if (zm) zona = zm[1].replace(/§/g,' ').trim().substring(0,60);
-
-  // ESCALA
-  var escala = '';
-  var em = t.match(/ESCALA\s*[:\-]?\s*(.+?)(?=\s+(?:FECHA|ZONA|CODIGO|DISEÑO|§|$))/i);
-  if (em) escala = em[1].replace(/§/g,' ').trim().substring(0,30);
-
-  // FECHA — busca el patrón dd/mm/yyyy más cercano a "FECHA"
-  var fm = t.match(/FECHA\s*[:\-]?\s*(\d{2}\/\d{2}\/\d{4})/i);
-  var fecha = fm ? fm[1] : (t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/)||['',''])[1];
-
-  // REV
-  var rm = t.match(/\bREV\s*[:\-]?\s*(R\d{2,3})\b/i);
-  var rev = rm ? rm[1].toUpperCase() : '';
-
-  // EQUIPO — con o sin ":"
-  var diseno    = stripDate(xf('DISE[ÑN]O', t, 60));
-  var dibujo    = stripDate(xf('DIBUJO', t, 60));
-
-  var revision = '';
-  var rvm = t.match(/REVISI[OÓ]N\s*[:\-]?\s*(.+?)(?=\s+(?:APROBACI[OÓ]N|DIRECTOR|DISEÑO|DISENO|DIBUJO|§|$))/i);
-  if (rvm) revision = stripDate(rvm[1].replace(/§/g,' ').trim()).substring(0,50);
-
-  var aprobacion = '';
-  var apm = t.match(/APROBACI[OÓ]N\s*[:\-]?\s*(.+?)(?=\s+(?:DIRECTOR|DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|§|$))/i);
-  if (apm) aprobacion = stripDate(apm[1].replace(/§/g,' ').trim()).substring(0,50);
-
-  var director = '';
-  var dm = t.match(/DIRECTOR(?:\s+DEL\s+PROYECTO)?\s*[:\-]?\s*(.+?)(?=\s+(?:DISEÑO|DISENO|DIBUJO|REVISI[OÓ]N|APROBACI[OÓ]N|§|$))/i);
-  if (dm) director = stripDate(dm[1].replace(/§/g,' ').trim()).substring(0,60);
-
-  return { code, title, especialidad, uso, zona, escala, fecha, rev,
-           diseno, dibujo, revision, aprobacion, director, notas: '' };
-}
-
-// ── CLAUDE API — extrae metadatos del cajetín BRH ────────────
-// Convierte el PDF a base64 y lo manda a Claude con el prompt
-// exacto calibrado con el PDF real 500122-BERH001-740-XX-DR-LS-040041
-
-const CLAUDE_PROMPT = `Analiza el plano en PDF adjunto, enfócate en el cajetín/membrete de la derecha y extrae los metadatos estructurados exactamente en el formato JSON que se detalla a continuación.
-
-Para tu entrenamiento, la estructura semántica de los datos del cajetín sigue este orden y lógica (basado en la lectura de contenedores de texto):
-- Código del Plano (ej. 500122-BERH001-740-XX-DR-LS-040041)
-- Fecha del Plano (ej. 05/06/2026)
-- Revisión Actual (ej. R02)
-- Zona/Componente (ej. 740 - Outflow - 1)
-- Especialidad (ej. ARQUITECTURA Y PAISAJE URBANO)
-- Nombre del Plano (Línea 1: Proyecto, Línea 2: Sub-proyecto, Línea 3: Sector/Red)
-- Responsables y Firmas (Nombre y Fecha de: Diseño, Dibujo, Revisión, Aprobación, Dirección)
-- Historial de Revisiones (Tabla con columnas: Rev, Fecha, Descripción, Revisado Por, Director)
-
-Devuelve ÚNICAMENTE un objeto JSON con la siguiente estructura, sin texto adicional, sin backticks:
+Devuelve ÚNICAMENTE este JSON sin texto adicional, sin backticks:
 {
-  "metadatos_principales": {
-    "codigo_plano": "string",
-    "fecha": "string (DD/MM/AAAA)",
-    "revision_actual": "string",
-    "zona": "string",
-    "especialidad": "string",
-    "nombre_plano": {
-      "proyecto": "string",
-      "descripcion_situacion": "string",
-      "sector_detalle": "string"
-    }
+  "codigo_plano": "string — código completo, ej: 500122-BERH001-740-XX-DR-LS-040041",
+  "fecha": "string — DD/MM/AAAA",
+  "revision_actual": "string — ej: R02",
+  "nombre_plano": {
+    "linea1": "string — nombre principal del plano",
+    "linea2": "string — subtítulo o descripción (puede estar vacío)",
+    "linea3": "string — sector o red (puede estar vacío)"
   },
   "responsables": {
-    "diseno": { "nombre": "string", "fecha": "string" },
-    "dibujo": { "nombre": "string", "fecha": "string" },
-    "revision": { "nombre": "string", "fecha": "string" },
-    "aprobacion": { "nombre": "string", "fecha": "string" },
+    "diseno":    { "nombre": "string", "fecha": "string" },
+    "dibujo":    { "nombre": "string", "fecha": "string" },
+    "revision":  { "nombre": "string", "fecha": "string" },
+    "aprobacion":{ "nombre": "string", "fecha": "string" },
     "director_proyecto": { "nombre": "string", "fecha": "string" }
   },
   "historial_revisiones": [
-    {
-      "rev": "string",
-      "fecha": "string (MM.AAAA)",
-      "descripcion": "string",
-      "revisado_por": "string",
-      "director": "string"
-    }
+    { "rev": "string", "fecha": "string (MM.AAAA)", "descripcion": "string", "revisado_por": "string", "director": "string" }
   ]
 }`;
 
+// ── EXTRACCIÓN CON CLAUDE API ─────────────────────────────────
 async function extractPDF(file) {
-  // Fallback usando nombre del archivo
   var codeFromName = (file.name.match(/(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})/i)||['',''])[1].toUpperCase();
   var fallback = {
     code: codeFromName || file.name.replace(/\.pdf$/i,''),
-    title:'', especialidad:'', uso:'', zona:'', escala:'',
-    fecha:'', rev:'', diseno:'', dibujo:'', revision:'',
-    aprobacion:'', director:'', notas:''
+    titulo: { linea1:'', linea2:'', linea3:'' },
+    rev:'', fecha:'', _raw: null
   };
 
   try {
-    // Convierte el PDF a base64
     var ab = await file.arrayBuffer();
     var bytes = new Uint8Array(ab);
     var binary = '';
     for (var i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     var base64 = btoa(binary);
 
-    // Llama a Claude API con el PDF como documento
     var apiKey = getApiKey();
-    if (!apiKey) throw new Error('API key no configurada — ingresa tu clave en el campo API KEY del header');
+    if (!apiKey) throw new Error('API key no configurada');
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -710,18 +395,8 @@ async function extractPDF(file) {
         messages: [{
           role: 'user',
           content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64
-              }
-            },
-            {
-              type: 'text',
-              text: CLAUDE_PROMPT
-            }
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: CLAUDE_PROMPT }
           ]
         }]
       })
@@ -731,94 +406,69 @@ async function extractPDF(file) {
 
     var data = await response.json();
     var raw  = data.content.filter(b => b.type === 'text').map(b => b.text).join('');
-
-    // Limpia posibles backticks si Claude los incluyó
     var clean = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
     var json  = JSON.parse(clean);
 
-    // Mapea el JSON estructurado a los campos planos de la tabla
-    var m = json.metadatos_principales || {};
-    var r = json.responsables || {};
-    var np = m.nombre_plano || {};
+    // Guarda para debug
+    window._lastJSON = json;
 
-    var title = [np.proyecto, np.descripcion_situacion, np.sector_detalle]
-      .filter(Boolean).join(' · ').substring(0, 150);
+    var np = json.nombre_plano || {};
 
     return {
-      code:         m.codigo_plano    || fallback.code,
-      title:        title             || '',
-      especialidad: m.especialidad    || '',
-      uso:          m.zona            || '',   // "zona" del JSON = campo USO de la tabla
-      zona:         '',                        // la zona geográfica viene del cajetín inferior
-      escala:       'INDICADA',
-      fecha:        m.fecha           || '',
-      rev:          m.revision_actual || '',
-      diseno:       (r.diseno         || {}).nombre || '',
-      dibujo:       (r.dibujo         || {}).nombre || '',
-      revision:     (r.revision       || {}).nombre || '',
-      aprobacion:   (r.aprobacion     || {}).nombre || '',
-      director:     (r.director_proyecto || {}).nombre || '',
-      notas:        '',
-      // Guarda el JSON completo para acceso posterior (historial, etc.)
-      _raw: json
+      code:   json.codigo_plano    || fallback.code,
+      titulo: {
+        linea1: np.linea1 || '',
+        linea2: np.linea2 || '',
+        linea3: np.linea3 || ''
+      },
+      rev:   json.revision_actual  || '',
+      fecha: json.fecha            || '',
+      _raw:  json
     };
 
   } catch(e) {
     console.warn('Claude API error:', e.message);
-    // Fallback: intenta extraer el código del texto del PDF con PDF.js
-    return await extractPDFfallback(file, fallback);
+    toast('Error: ' + e.message, 'err');
+    // Intento fallback rápido con PDF.js (solo código y fecha)
+    return await extractFallback(file, fallback);
   }
 }
 
-// ── FALLBACK: PDF.js si la API falla ─────────────────────────
-async function extractPDFfallback(file, fallback) {
+// ── FALLBACK PDF.js ───────────────────────────────────────────
+async function extractFallback(file, fallback) {
   if (typeof pdfjsLib === 'undefined') return fallback;
   try {
     var ab  = await file.arrayBuffer();
     var pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    var allItems = [];
+    var texts = [];
     for (var p = 1; p <= Math.min(pdf.numPages, 2); p++) {
       var page = await pdf.getPage(p);
-      var vp   = page.getViewport({ scale: 1 });
       var tc   = await page.getTextContent();
-      tc.items.forEach(function(item) {
-        var s = item.str.trim();
-        if (s) allItems.push({ x: Math.round(item.transform[4]), y: Math.round(vp.height - item.transform[5]), text: s });
-      });
+      tc.items.forEach(function(item) { if (item.str.trim()) texts.push(item.str.trim()); });
     }
-    allItems.sort((a,b) => a.y - b.y || a.x - b.x);
-    var fullText = allItems.map(i => i.text).join(' ');
-    window._lastRaw = fullText;
-
-    // Solo extrae código y fecha como mínimo
-    var cm = fullText.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
-    var fm = fullText.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
-    var rm = fullText.match(/\b(R0\d)\b/gi);
-    if (rm) { rm.sort(); }
-
+    var full = texts.join(' ');
+    var cm = full.match(/\b(\d{6}-[A-Z0-9]+-\d{3}-[A-Z0-9]+-[A-Z]+-[A-Z]+-\d{6})\b/i);
+    var fm = full.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+    var rm = full.match(/\b(R0\d)\b/gi);
+    if (rm) rm.sort();
     return {
       ...fallback,
       code:  cm ? cm[1].toUpperCase() : fallback.code,
       fecha: fm ? fm[1] : '',
       rev:   rm ? rm[rm.length-1].toUpperCase() : '',
     };
-  } catch(e) {
-    return fallback;
-  }
+  } catch(e) { return fallback; }
 }
 
 // ── FILE HANDLING ─────────────────────────────────────────────
 function onDragOver(e) { e.preventDefault(); document.getElementById('dz').classList.add('over'); }
-function onDragLeave(e) { document.getElementById('dz').classList.remove('over'); }
+function onDragLeave() { document.getElementById('dz').classList.remove('over'); }
 function onDrop(e) {
   e.preventDefault();
   document.getElementById('dz').classList.remove('over');
   processFiles(Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf')));
 }
-function onFileSelect(e) {
-  processFiles(Array.from(e.target.files));
-  e.target.value = '';
-}
+function onFileSelect(e) { processFiles(Array.from(e.target.files)); e.target.value = ''; }
 
 async function processFiles(files) {
   if (!files.length) return;
@@ -831,11 +481,9 @@ async function processFiles(files) {
     lbl.textContent = 'Procesando ' + (i+1) + '/' + files.length + ' · ' + files[i].name;
     fill.style.width = Math.round(((i+1)/files.length)*100) + '%';
     var data = await extractPDF(files[i]);
-    // Evita duplicados por código — actualiza si ya existe
     var idx = rows.findIndex(r => r.code === data.code);
     if (idx >= 0) {
-      // Rellena campos vacíos
-      Object.keys(data).forEach(k => { if (!rows[idx][k]) rows[idx][k] = data[k]; });
+      rows[idx] = data;
     } else {
       rows.push(data);
       added++;
@@ -843,62 +491,72 @@ async function processFiles(files) {
   }
   setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 800);
   renderTable();
-  toast(added + ' lámina' + (added!==1?'s':'') + ' cargada' + (added!==1?'s':'') + (files.length-added>0?' · '+(files.length-added)+' actualizada'+(files.length-added!==1?'s':''):''), 'ok');
+  toast(added + ' lámina' + (added!==1?'s':'') + ' cargada' + (added!==1?'s':''), 'ok');
   document.getElementById('ft-time').textContent = 'Última carga: ' + new Date().toLocaleTimeString('es-PE');
 }
 
 // ── RENDER ────────────────────────────────────────────────────
 function getFiltered() {
   return rows.filter(r => {
-    for (var k in colFilters) {
-      if (colFilters[k] && !String(r[k]||'').toLowerCase().includes(colFilters[k].toLowerCase())) return false;
+    // Filtro código
+    if (colFilters.code && !r.code.toLowerCase().includes(colFilters.code.toLowerCase())) return false;
+    // Filtro nombre (busca en las 3 líneas)
+    if (colFilters.title) {
+      var q = colFilters.title.toLowerCase();
+      var haystack = ((r.titulo.linea1||'') + ' ' + (r.titulo.linea2||'') + ' ' + (r.titulo.linea3||'')).toLowerCase();
+      if (!haystack.includes(q)) return false;
     }
+    // Filtro rev
+    if (colFilters.rev && !(r.rev||'').toLowerCase().includes(colFilters.rev.toLowerCase())) return false;
+    // Filtro fecha
+    if (colFilters.fecha && !(r.fecha||'').includes(colFilters.fecha)) return false;
     return true;
   });
 }
 
+function revClass(rev) {
+  var n = parseInt((rev||'R00').replace(/\D/g,''), 10);
+  return n >= 2 ? 'rev-r2' : n === 1 ? 'rev-r1' : 'rev-r0';
+}
+
 function renderTable() {
   var data = getFiltered();
-  document.getElementById('cnt').textContent = data.length + (data.length !== rows.length ? '/' + rows.length : '');
+  var total = rows.length;
+  document.getElementById('cnt').textContent = data.length + (data.length !== total ? '/' + total : '');
   var area = document.getElementById('table-area');
 
-  if (rows.length === 0) {
+  if (total === 0) {
     area.innerHTML = '<div class="empty"><div class="empty-icon">⬚</div><p>No hay láminas cargadas.<br>Arrastra uno o varios PDFs para comenzar.</p></div>';
     return;
   }
-
   if (data.length === 0) {
-    area.innerHTML = '<div class="empty"><div class="empty-icon">∅</div><p>Ninguna lámina coincide con los filtros activos.</p></div>';
+    area.innerHTML = '<div class="empty"><div class="empty-icon">∅</div><p>Ninguna lámina coincide con los filtros.</p></div>';
     return;
   }
 
+  // Cabecera
   var th1 = COLS.map(c => '<th style="min-width:' + c.w + '">' + c.label + '</th>').join('');
   var th2 = COLS.map(c =>
     '<th><input class="fi" placeholder="—" value="' + (colFilters[c.key]||'') + '" ' +
     'oninput="setFilter(\'' + c.key + '\',this.value)"></th>'
   ).join('');
 
-  var tbody = data.map(function(r, i) {
-    var rn = parseInt((r.rev||'R00').replace(/\D/g,''), 10);
-    var rc = rn >= 2 ? 'rev-r2' : rn === 1 ? 'rev-r1' : 'rev-r0';
-    function td(v, cls) {
-      return '<td class="' + (cls||'') + '" title="' + (v||'') + '">' + (v||'—') + '</td>';
-    }
+  // Filas
+  var tbody = data.map(function(r) {
+    var np = r.titulo || {};
+    var nombreHTML = '';
+    if (np.linea1) nombreHTML += '<span class="nombre-linea1">' + esc(np.linea1) + '</span>';
+    if (np.linea2) nombreHTML += '<span class="nombre-linea2">' + esc(np.linea2) + '</span>';
+    if (np.linea3) nombreHTML += '<span class="nombre-linea3">' + esc(np.linea3) + '</span>';
+    if (!nombreHTML) nombreHTML = '<span style="color:var(--text3)">—</span>';
+
+    var rc = revClass(r.rev);
+
     return '<tr>' +
-      '<td style="font-family:var(--mono);font-size:11px" title="'+(r.code||'')+'">' + (r.code||'—') + '</td>' +
-      td(r.title,'clip') +
-      td(r.especialidad,'clip') +
-      td(r.uso) +
-      td(r.zona) +
-      td(r.escala) +
-      td(r.fecha) +
-      '<td><span class="rev-pill ' + rc + '">' + (r.rev||'—') + '</span></td>' +
-      td(r.diseno) +
-      td(r.dibujo) +
-      td(r.revision) +
-      td(r.aprobacion) +
-      td(r.director,'clip') +
-      td(r.notas,'clip') +
+      '<td title="' + esc(r.code) + '">' + esc(r.code||'—') + '</td>' +
+      '<td class="nombre-cell">' + nombreHTML + '</td>' +
+      '<td class="rev-cell"><span class="rev-pill ' + rc + '">' + esc(r.rev||'—') + '</span></td>' +
+      '<td class="fecha-cell">' + esc(r.fecha||'—') + '</td>' +
       '</tr>';
   }).join('');
 
@@ -914,99 +572,83 @@ function renderTable() {
     '</div>';
 }
 
-function setFilter(key, val) {
-  colFilters[key] = val;
-  renderTable();
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── ACTIONS ───────────────────────────────────────────────────
+function setFilter(key, val) { colFilters[key] = val; renderTable(); }
+
+// ── ACCIONES ──────────────────────────────────────────────────
 function clearAll() {
-  if (!rows.length) { toast('No hay datos que limpiar', ''); return; }
-  if (!confirm('¿Eliminar todas las ' + rows.length + ' láminas cargadas?')) return;
-  rows = [];
-  colFilters = {};
+  if (!rows.length) { toast('No hay datos que limpiar',''); return; }
+  if (!confirm('¿Eliminar todas las ' + rows.length + ' láminas?')) return;
+  rows = []; colFilters = {};
   renderTable();
   document.getElementById('cnt').textContent = '0';
   document.getElementById('ft-time').textContent = '—';
-  toast('Datos eliminados', '');
+  toast('Datos eliminados','');
 }
 
 function exportCSV() {
-  if (!rows.length) { toast('No hay datos para exportar', ''); return; }
+  if (!rows.length) { toast('No hay datos para exportar',''); return; }
+
+  function q(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }
 
   var lines = [];
-
   rows.forEach(function(r) {
-    var raw = r._raw || {};
-    var m   = raw.metadatos_principales || {};
-    var rsp = raw.responsables || {};
-    var hist= raw.historial_revisiones || [];
-    var np  = m.nombre_plano || {};
+    var raw  = r._raw || {};
+    var rsp  = raw.responsables || {};
+    var hist = raw.historial_revisiones || [];
+    var np   = r.titulo || {};
 
-    // Nombre del plano completo (3 líneas unidas)
-    var nombrePlano = [np.proyecto, np.descripcion_situacion, np.sector_detalle]
-      .filter(Boolean).join(' ');
-    if (!nombrePlano) nombrePlano = r.title || '';
+    var nombreCompleto = [np.linea1, np.linea2, np.linea3].filter(Boolean).join(' · ');
 
-    // Responsables
-    var dis = rsp.diseno             || {};
-    var dib = rsp.dibujo             || {};
-    var rev = rsp.revision           || {};
-    var apr = rsp.aprobacion         || {};
-    var dir = rsp.director_proyecto  || {};
+    function n(obj) { return obj && obj.nombre ? obj.nombre : ''; }
+    function f(obj) { return obj && obj.fecha   ? obj.fecha  : ''; }
 
-    // Usa campos planos como fallback si no hay _raw
-    function n(obj, campo) { return obj.nombre || r[campo] || ''; }
-    function f(obj, fecha_fallback) { return obj.fecha || fecha_fallback || ''; }
-
-    function q(v) { return '"' + String(v||'').replace(/"/g,'""') + '"'; }
-    function row() {
-      return Array.from(arguments).map(q).join(',');
-    }
-
-    lines.push(row('=== DATOS DEL ARCHIVO: ' + (r.code||'') + ' ==='));
-    lines.push(row('CÓDIGO DEL PLANO',    r.code        || m.codigo_plano || ''));
-    lines.push(row('FECHA',               r.fecha       || m.fecha        || ''));
-    lines.push(row('REV',                 r.rev         || m.revision_actual || ''));
-    lines.push(row('ZONA',                r.uso         || m.zona         || ''));
-    lines.push(row('ESPECIALIDAD',        r.especialidad|| m.especialidad || ''));
-    lines.push(row('PLANO',               nombrePlano));
-    lines.push('');  // línea vacía
-
-    // Responsables
-    lines.push(row('DISEÑO',               n(dis,'diseno'),    f(dis, r.fecha)));
-    lines.push(row('DIBUJO',               n(dib,'dibujo'),    f(dib, r.fecha)));
-    lines.push(row('REVISION',             n(rev,'revision'),  f(rev, r.fecha)));
-    lines.push(row('APROBACION',           n(apr,'aprobacion'),f(apr, r.fecha)));
-    lines.push(row('DIRECTOR DEL PROYECTO',n(dir,'director'),  f(dir, r.fecha)));
+    lines.push(q('=== ' + r.code + ' ==='));
+    lines.push([q('CÓDIGO DEL PLANO'), q(r.code)].join(','));
+    lines.push([q('FECHA'),            q(r.fecha)].join(','));
+    lines.push([q('REV'),              q(r.rev)].join(','));
+    lines.push([q('PLANO'),            q(nombreCompleto)].join(','));
+    lines.push([q('  Línea 1'),        q(np.linea1||'')].join(','));
+    lines.push([q('  Línea 2'),        q(np.linea2||'')].join(','));
+    lines.push([q('  Línea 3'),        q(np.linea3||'')].join(','));
+    lines.push('');
+    lines.push([q('DISEÑO'),               q(n(rsp.diseno)),    q(f(rsp.diseno))].join(','));
+    lines.push([q('DIBUJO'),               q(n(rsp.dibujo)),    q(f(rsp.dibujo))].join(','));
+    lines.push([q('REVISIÓN'),             q(n(rsp.revision)),  q(f(rsp.revision))].join(','));
+    lines.push([q('APROBACIÓN'),           q(n(rsp.aprobacion)),q(f(rsp.aprobacion))].join(','));
+    lines.push([q('DIRECTOR DEL PROYECTO'),q(n(rsp.director_proyecto)),q(f(rsp.director_proyecto))].join(','));
     lines.push('');
 
-    // Historial de revisiones
-    lines.push(row('REV. Nª','FECHA DESCRIPCIÓN DE LA REVISIÓN','REVISADO POR','DIRECTOR'));
     if (hist.length > 0) {
+      lines.push([q('REV'),q('FECHA'),q('DESCRIPCIÓN'),q('REVISADO POR'),q('DIRECTOR')].join(','));
       hist.forEach(function(h) {
-        lines.push(row(h.rev||'', h.fecha||'', h.descripcion||'', h.revisado_por||'', h.director||''));
+        lines.push([q(h.rev||''),q(h.fecha||''),q(h.descripcion||''),q(h.revisado_por||''),q(h.director||'')].join(','));
       });
-    } else {
-      // Fallback genérico si no hay historial en el JSON
-      lines.push(row('R00','01.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
-      lines.push(row('R01','04.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
-      lines.push(row('R02','06.2026','PAQUETE 4.1 - EMITIDO PARA APROBACIÓN','N.A.','V.Q.'));
     }
-
-    lines.push('');
-    lines.push('');
+    lines.push(''); lines.push('');
   });
 
   var csv = '\uFEFF' + lines.join('\n');
   var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  a.download = 'metadatos_todos_los_planos_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download = 'laminas_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   toast('CSV exportado — ' + rows.length + ' plano' + (rows.length!==1?'s':''), 'ok');
 }
 
-// ── TOAST ─────────────────────────────────────────────────────
+// ── DEBUG ──────────────────────────────────────────────────────
+function showDebug() {
+  var json = window._lastJSON || null;
+  document.getElementById('dbg-txt').value = json
+    ? JSON.stringify(json, null, 2)
+    : 'Aún no se ha procesado ningún PDF.';
+  document.getElementById('dbg-overlay').style.display = 'flex';
+}
+
+// ── TOAST ──────────────────────────────────────────────────────
 var _tt;
 function toast(msg, type) {
   var el = document.getElementById('toast');
@@ -1016,33 +658,7 @@ function toast(msg, type) {
   _tt = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-// ── INIT ──────────────────────────────────────────────────────
 renderTable();
-</script>
-<!-- DEBUG MODAL -->
-<div id="dbg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center">
-  <div style="background:#fff;border:1px solid #ccc;border-radius:6px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
-    <div style="padding:14px 18px;border-bottom:1px solid #e2e0db;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-family:var(--mono);font-size:12px;font-weight:500">Texto crudo extraído del PDF</span>
-      <button onclick="document.getElementById('dbg-overlay').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:#999">×</button>
-    </div>
-    <textarea id="dbg-txt" readonly style="flex:1;padding:14px;font-family:var(--mono);font-size:11px;color:#333;border:none;resize:none;outline:none;overflow:auto;min-height:300px;background:#f7f6f3;line-height:1.7"></textarea>
-    <div style="padding:10px 18px;border-top:1px solid #e2e0db;display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('dbg-txt').value);toast('Copiado','ok')">Copiar texto</button>
-      <button class="btn" onclick="document.getElementById('dbg-overlay').style.display='none'">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<script>
-function showDebug() {
-  var cara = window._caratulaText || '—';
-  var full  = window._lastRaw     || '—';
-  var out   = '=== CARÁTULA AISLADA (zona X derecha) ===\n' + cara
-            + '\n\n=== TODAS LAS LÍNEAS RECONSTRUIDAS ===\n' + full;
-  document.getElementById('dbg-txt').value = out;
-  document.getElementById('dbg-overlay').style.display = 'flex';
-}
 </script>
 </body>
 </html>
